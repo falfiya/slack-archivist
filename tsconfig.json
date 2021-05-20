@@ -1,0 +1,24 @@
+{
+   "compilerOptions": {
+      "strict": true,
+      "lib": [
+         "ES5",
+         "ES2015",
+         "ES2016",
+         "ES2018",
+         "ES2019",
+         "ES2020",
+      ],
+      "target": "ES2019",
+      "module": "CommonJS",
+      "esModuleInterop": true,
+      "moduleResolution": "Node",
+
+      "outDir": "bin",
+
+      "newLine": "lf",
+
+      "sourceMap": true,
+   },
+   "include": ["src/**/*.ts"]
+}
