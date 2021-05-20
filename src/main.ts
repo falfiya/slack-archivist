@@ -2,12 +2,10 @@ import fs from "fs";
 import rls from "readline-sync";
 
 type str = string;
-type int = number;
 
 const input = rls.question;
 const print = console.log.bind(console);
-// const path  = input("Enter the path\n> ");
-const path = "../dctco.slack.com"
+const path  = input("Enter the path\n> ");
 
 {
    if (!fs.existsSync(path)) {
@@ -28,20 +26,26 @@ const path = "../dctco.slack.com"
 var index: (str | undefined)[] = [];
 const read_json = (file: str) => JSON.parse(fs.readFileSync(file, "utf8"));
 
-import {Member} from "../vendor/UsersListResponse";
+import {Member} from "./UsersListResponse";
 const users: Member[] = read_json(`${path}/users.json`);
 
 for (const {profile} of users) {
    if (!profile) {
       continue;
    }
-   const ikeys = Object.keys(profile).filter(e => e.startsWith("image"));
-   ikeys.forEach(key => index.push(profile[key]));
+
+   index.push(profile.image_original);
 }
 
-const channels: str[] = read_json(`${path}/channels.json`).map(c => c.name);
+var channels: str[];
 
-import {Message} from "../vendor/ConversationsHistoryResponse";
+if (fs.existsSync(`${path}/dms.json`)) {
+   channels = read_json(`${path}/dms.json`).map(dm => dm.id);
+} else {
+   channels = read_json(`${path}/channels.json`).map(c => c.name);
+}
+
+import {Message} from "./ConversationsHistoryResponse";
 
 var msgs_read = 0;
 
@@ -57,8 +61,6 @@ for (const n of channels) {
          if (m.files) {
             for (const f of m.files) {
                index.push(f.url_private);
-               index.push(f.url_private_download);
-               Object.keys(f).filter(e => e.startsWith("thumb_") && !(e.endsWith('w') || e.endsWith('h'))).forEach(k => index.push(f[k]));
             }
          }
 
@@ -98,17 +100,24 @@ void async function dl() {
          continue;
       }
       var fname;
-      const token = url.indexOf("?t=xoxe");
-      if (token === -1) {
+      const query = url.indexOf("?");
+      if (query === -1) {
          fname = `downloads/${sanitize(url, {replacement: '-'})}`;
       } else {
-         fname = `downloads/${sanitize(url.slice(0, token), {replacement: '-'})}`;
+         fname = `downloads/${sanitize(url.slice(0, query), {replacement: '-'})}`;
       }
       if (fs.existsSync(fname)) {
          print(`Already have ${fname}`);
          continue;
       }
-      const buf = await fetch(url).then(res => res.buffer());
+
+      var buf;
+      try {
+         buf = await fetch(url).then(res => res.buffer());
+      } catch (_) {
+         print(`Bad request to ${url}`);
+         continue;
+      }
       fs.writeFileSync(fname, buf);
       print(`Downloaded to ${fname}`);
       await short_nap();
