@@ -1,7 +1,7 @@
-npx := .\node_modules\.bin
+PATH += ;.\node_modules\.bin
 
-run: bin
-	node bin/main
+run: bin/main.js
+	node $<
 
-bin: $(wildcard src/*.ts)
-	-$(npx)\tsc
+bin/main.js: $(wildcard src/*.ts)
+	-tsc
