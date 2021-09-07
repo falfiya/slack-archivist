@@ -19,6 +19,7 @@
       "newLine": "lf",
 
       // "sourceMap": true,
+      "strictPropertyInitialization": false
    },
    "include": ["src/**/*.ts"]
 }

@@ -1,42 +1,53 @@
-import {WebClient} from "@slack/web-api";
-import * as ConfigRecord from "./rConfig";
-import * as f$ from "./f$";
+import * as io from "./io";
+import {sConfig} from "./sConfig";
 
-var userToken = null;
-var config;
 try {
-   config = f$.readRecord("config.json");
+   const config = io.readStruct("config.json", sConfig);
+   var userToken = config.userToken;
+   var archiveDir = config.archiveDir;
 } catch (e) {
-   if (f$.existsSync("config.json")) {
+   if (io.existsSync("config.json")) {
       throw e;
    } else {
-      console.warn("You did not make a config file.");
+      io.errs("You did not make a config file.");
       console.warn("Trying to make one for you.");
-      f$.writeJSONDeep("config.json", ConfigRecord._new());
-      console.warn(`Made a config.json at ${__dirname}/config.json.`);
-      console.warn("Please configure and then run again.")
+      io.writeObjectDeep("config.json", sConfig.default);
+      io.errs(`Made a config.json at ${__dirname}/config.json.`);
+      io.errs("Please configure and then run again.")
       process.exit(1);
    }
 }
 
-if (typeof config.userToken === "string") {
-   userToken = config.userToken;
-} else {
-   throw new TypeError("config.userToken should be of type string!");
+import {WebClient, Channel} from "./slack";
+const client = new WebClient(userToken);
+const allConversations = {types: "public_channel,private_channel,mpim,im"};
+
+function sleep(s: number) {
+   io.puts(`sleeping for ${s} second${s === 1 ? "" : "s"}`);
+   return new Promise<void>(res => setTimeout(res, s * 1000));
 }
 
-const client = new WebClient(userToken);
-
-const conversationTypes = ["public_channel", "private_channel", "mpim", "im"];
-const allConversations = {types: conversationTypes.join(",")};
-
-void async function main() {
+void async function main(): Promise<void> {
    const conversations = await client.users.conversations(allConversations);
-   if (conversations.channels == null) {
+   if (conversations.channels === undefined) {
       throw new Error(conversations.error);
    }
 
+   const channels_json = `${archiveDir}/channels.json`;
+
+   const oChannels =
+      io.readStructOrDefault(channels_json, sChannels);
+
    for (const chan of conversations.channels) {
-      
+      await archiveChannel(chan);
+      oChannels.push(chan);
+      io.writeObjectDeep(channels_json, oChannels);
    }
 }();
+
+import {sChannels} from "./sChannels";
+async function archiveChannel(chan: Channel): Promise<void> {
+   if (chan.id === undefined) {
+      throw new TypeError("pain and suffering");
+   }
+}
