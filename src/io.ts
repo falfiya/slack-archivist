@@ -4,8 +4,18 @@ import {Struct} from "./Struct";
 
 export {existsSync} from "fs";
 
+const defaultReplacer = null;
+const defaultSpaces   = 3;
+
+export const pJSONStringifyArguments: [any, any] =
+   [defaultReplacer, defaultSpaces];
+
 function stringifyObject(record: object) {
-   return JSON.stringify(record, null, 3);
+   return JSON.stringify(
+      record,
+      pJSONStringifyArguments[0],
+      pJSONStringifyArguments[1],
+   );
 }
 
 export function mkdirDeep(path: string): void {

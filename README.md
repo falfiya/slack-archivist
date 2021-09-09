@@ -35,14 +35,13 @@
 ## export structure
 
 ```
-$archiveDir
+$archive_dir
 > channels.json
-> $channelId
+> $channel_id
+   > progress.json
+   > messages.json
    > files.json
-   > history.json
    > files
-      > $fileId
+      > $file_id
          > $filename
-   > messages
-      > \d{4}.\d{2}.\d{2}.json
 ```
