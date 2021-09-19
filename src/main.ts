@@ -1,31 +1,70 @@
 import * as io from "./io";
-
 import {sConfig} from "./sConfig";
-try {
-   var config_fd = io.openSync("config.json", io.C.O_RDONLY)
-} catch (e) {
-   if (io.existsSync("config.json")) throw e;
 
-   io.errs("You did not make a config file.");
-   console.warn("Trying to make one for you.");
-   io.writeToJSONDeep("config.json", sConfig.default);
-   io.errs(`Made a config.json at ${__dirname}/config.json.`);
-   io.errs("Please configure and then run again.")
-   process.exit(1);
+var config: sConfig;
+{
+   const filename = `${__dirname}/config.json`;
+   const res = io.open(filename, io.C.O_RDONLY);
+   switch (res.tag) {
+   case "create":
+      io.errs("You did not make a config file so I made one for you.");
+      io.writeToJSON(res.fd, sConfig.default);
+      io.errs(`Your config file is at ${filename}.`);
+      process.exit(1);
+   case "error":
+      io.errs(res.error.toString());
+      io.errs(`There was an error obtaining a handle to ${filename}.`);
+      process.exit(1);
+   case "open":
+      const parsed = io.readStruct(res.fd, sConfig);
+      if (parsed === null) {
+         io.errs(`There was an error reading the structured JSON inside ${filename}.`);
+         io.errs("Either correct it or remove it manually.");
+         process.exit(1);
+      }
+      config = parsed;
+   }
+   io.close(res.fd);
 }
 
-const config = io.readStruct(config_fd, sConfig);
-
-import {WebClient, Channel} from "./slack";
+import {WebClient, Channel, Timestamp} from "./slack";
 const client = new WebClient(config.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 
 import {sProgress} from "./sProgress";
 import {sMessages} from "./sMessages";
 import {sChannels} from "./sChannels";
-import {object, sleep} from "./util";
+import {object} from "./types";
 const archiveDir = config.archiveDir;
-const channels_json = `${archiveDir}/channels.json`;
+
+namespace channels_json {
+   const path = `${archiveDir}/channels.json`;
+   export var fd: number;
+   export var o: sChannels;
+   const res = io.open(path, io.C.O_RDWR);
+   switch (res.tag) {
+   case "create":
+      res
+      break;
+   case "open":
+      fd = res.fd;
+      try {
+         o = io.readStruct(fd, sChannels);
+      }
+      catch (e) {
+         io.errs(String(e));
+         io.errs(`There was an error reading the structured JSON inside ${path}.`);
+         io.errs("Correct the JSON or delete the file manually.");
+      }
+      break;
+   case "error":
+      io.errs(res.error.toString());
+      io.errs(`There was an error opening ${path}.`);
+      io.errs("Did you do something funny with permissions?");
+      break;
+   }
+}
+
 
 async function archiveChannel(chan: Channel): Promise<void> {
    if (chan.id === undefined)
@@ -36,7 +75,8 @@ async function archiveChannel(chan: Channel): Promise<void> {
 
    io.puts("archiving from the past");
 
-   
+   var lastLatest: Timestamp | null = null;
+
    do {
       await sleep(3);
 

@@ -1,5 +1,5 @@
 import {Message, Timestamp} from "./slack";
-import {array, object} from "./util";
+import {array, object} from "./types";
 
 type TimestampContainer = {ts: Timestamp};
 namespace TimestampContainer {

@@ -1,5 +1,5 @@
 import {Timestamp} from "./slack";
-import {string, object, array} from "./util";
+import {string, object, array, u64} from "./types";
 
 export type FileCompletions = {[id: string]: number};
 namespace FileCompletions {
@@ -9,8 +9,8 @@ namespace FileCompletions {
 
 export type FileInProgress = {
    id: string;
-   bytesDownloaded: number;
-   bytesNeeded: number;
+   bytesDownloaded: u64;
+   bytesNeeded: u64;
 } | null;
 
 namespace FileInProgress {
@@ -18,19 +18,16 @@ namespace FileInProgress {
       if (typeof u !== "object") return false;
       if (u === null) return true;
       return 1
-         && object.hasKey(u, "id")
-         && object.hasKey(u, "bytesDownloaded")
-         && object.hasKey(u, "bytesNeeded")
-         && typeof u.id === "string"
-         && typeof u.bytesDownloaded === "number"
-         && typeof u.bytesNeeded === "number";
+         && object.hasTKey(u, "id", string.is)
+         && object.parseTKey(u, "bytesDownloaded", u64.parse)
+         && object.parseTKey(u, "bytesNeeded", u64.parse)
    }
 }
 
 export type MessageChunk = {
    oldest: Timestamp;
    latest: Timestamp;
-   finishedAt: string;
+   finishedAt: u64;
 }
 
 export namespace MessageChunk {
