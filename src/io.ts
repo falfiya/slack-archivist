@@ -2,19 +2,13 @@ import * as fs from "fs";
 import {dirname} from "path";
 import {Struct} from "./Struct";
 
-export {existsSync} from "fs";
+export {existsSync, openSync, closeSync, constants as C} from "fs";
 
-const defaultReplacer = null;
-const defaultSpaces   = 3;
-
-export const pJSONStringifyArguments: [any, any] =
-   [defaultReplacer, defaultSpaces];
-
-function stringifyObject(record: object) {
+function toJSON(what: any): string {
    return JSON.stringify(
-      record,
-      pJSONStringifyArguments[0],
-      pJSONStringifyArguments[1],
+      what,
+      null,
+      3,
    );
 }
 
@@ -23,23 +17,23 @@ export function mkdirDeep(path: string): void {
 }
 
 export function readStruct<T>
-(path: string, recordType: Struct<T>): T
+(f: fs.PathOrFileDescriptor, recordType: Struct<T>): T
 {
-   return recordType.fromAny(JSON.parse(fs.readFileSync(path, "utf8")));
+   return recordType.fromAny(JSON.parse(fs.readFileSync(f, "utf8")));
 }
 
 export function readStructOrDefault<T>
-(path: string, recordType: Struct<T>): T
+(f: fs.PathOrFileDescriptor, recordType: Struct<T>): T
 {
    try {
-      return readStruct(path, recordType);
+      return readStruct(f, recordType);
    } catch (e) {
       return recordType.default;
    }
 }
 
-export function writeObject(filename: string, record: object): void {
-   fs.writeFileSync(filename, stringifyObject(record));
+export function writeToJSON(f: fs.PathOrFileDescriptor, what: any): void {
+   fs.writeFileSync(f, toJSON(what));
 }
 
 export function writeDeep(filename: string, data: string | Buffer): void {
@@ -50,8 +44,8 @@ export function writeDeep(filename: string, data: string | Buffer): void {
    fs.writeFileSync(filename, data);
 }
 
-export function writeObjectDeep(filename: string, record: object) {
-   writeDeep(filename, stringifyObject(record));
+export function writeToJSONDeep(filename: string, what: any) {
+   writeDeep(filename, toJSON(what));
 }
 
 export function puts(str: string) {
