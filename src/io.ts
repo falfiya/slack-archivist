@@ -19,7 +19,7 @@ export function mkdirDeep(path: string): void {
 export function readStruct<T>
 (f: fs.PathOrFileDescriptor, recordType: Struct<T>): T
 {
-   return recordType.fromAny(JSON.parse(fs.readFileSync(f, "utf8")));
+   return recordType.parse(JSON.parse(fs.readFileSync(f, "utf8")));
 }
 
 export function readStructOrDefault<T>

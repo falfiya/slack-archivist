@@ -1,21 +1,23 @@
-import {Message, TS} from "./slack";
-import {expect, isArray} from "./util";
+import {Message, Timestamp} from "./slack";
+import {array, object} from "./util";
+
+type TimestampContainer = {ts: Timestamp};
+namespace TimestampContainer {
+   export const is = (u: unknown): u is TimestampContainer =>
+      object.is(u) && object.hasTKey(u, "ts", Timestamp.is);
+}
 
 export class sMessages extends Array<Message> {
    static default: sMessages = [];
 
    static parse(u: unknown): sMessages {
-      if (!isArray(u)) {
-         throw new TypeError("messages-json must be an Array!")
-      }
+      if (!array.isT(u, TimestampContainer.is))
+         throw new TypeError("messages_json must be an array of TimestampObject!");
 
-      var lastTs = "0000000000.000000" as TS;
+      var lastTs = Timestamp.MIN;
       for (const msg of u) {
-         if
-         expect(msg.ts, "msg.ts was undefined while loading messages.json");
-         if (msg.ts <= lastTs) {
+         if (msg.ts <= lastTs)
             throw new Error("messages out of order!");
-         }
          lastTs = msg.ts;
       }
 
@@ -23,8 +25,6 @@ export class sMessages extends Array<Message> {
    }
 
    static insert(into: sMessages, msg: Message): boolean {
-      // save us time if it's the first or last message
-      var lower = 1;
       var upper = into.length - 1;
 
       if (upper === -1) {
@@ -42,6 +42,8 @@ export class sMessages extends Array<Message> {
          return true;
       }
 
+
+      var lower = 1;
       // otherwise binary insert it
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;

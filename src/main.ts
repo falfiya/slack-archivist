@@ -16,23 +16,27 @@ try {
 
 const config = io.readStruct(config_fd, sConfig);
 
-import {WebClient, Channel, dateFromTS} from "./slack";
+import {WebClient, Channel} from "./slack";
 const client = new WebClient(config.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 
 import {sProgress} from "./sProgress";
 import {sMessages} from "./sMessages";
 import {sChannels} from "./sChannels";
-import {expect, hasKey, sleep} from "./util";
+import {object, sleep} from "./util";
 const archiveDir = config.archiveDir;
 const channels_json = `${archiveDir}/channels.json`;
 
 async function archiveChannel(chan: Channel): Promise<void> {
-   expect(chan.id, "channel id was undefined!");
+   if (chan.id === undefined)
+      throw new TypeError("chan.id was undefined!");
    const chanDir = `${archiveDir}/${chan.id}`;
    const progress_json = `${chanDir}/progress.json`;
    const messages_json = `${chanDir}/messages.json`;
 
+   io.puts("archiving from the past");
+
+   
    do {
       await sleep(3);
 
@@ -41,12 +45,11 @@ async function archiveChannel(chan: Channel): Promise<void> {
          channel: chan.id,
          latest: oProgress.messageLatestTimestamp,
       });
-      expect(res.messages, "res.messages was undefined!");
 
       const oMessages = io.readStructOrDefault(messages_json, sMessages);
       for (const msg of res.messages) {
          expect(msg.ts, "msg.ts was undefined!");
-         if (hasKey(oProgress.messages, msg.ts)) {
+         if (object.hasKey(oProgress.messages, msg.ts)) {
             continue;
          }
 

@@ -45,3 +45,7 @@ $archive_dir
       > $file_id
          > $filename
 ```
+
+## known issues
+
+- If you delete messages on a message boundary

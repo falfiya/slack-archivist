@@ -1,5 +1,11 @@
-import {isTS, TS} from "./slack";
-import {hasKey, isArray, isTArray} from "./util";
+import {Timestamp} from "./slack";
+import {string, object, array} from "./util";
+
+export type FileCompletions = {[id: string]: number};
+namespace FileCompletions {
+   export const is: (u: unknown) => u is FileCompletions =
+      object.is as any;
+}
 
 export type FileInProgress = {
    id: string;
@@ -12,9 +18,9 @@ namespace FileInProgress {
       if (typeof u !== "object") return false;
       if (u === null) return true;
       return 1
-         && hasKey(u, "id")
-         && hasKey(u, "bytesDownloaded")
-         && hasKey(u, "bytesNeeded")
+         && object.hasKey(u, "id")
+         && object.hasKey(u, "bytesDownloaded")
+         && object.hasKey(u, "bytesNeeded")
          && typeof u.id === "string"
          && typeof u.bytesDownloaded === "number"
          && typeof u.bytesNeeded === "number";
@@ -22,66 +28,53 @@ namespace FileInProgress {
 }
 
 export type MessageChunk = {
-   oldest: TS;
-   latest: TS;
-   finishedAt: number;
+   oldest: Timestamp;
+   latest: Timestamp;
+   finishedAt: string;
 }
 
 export namespace MessageChunk {
    export const is = (u: unknown): u is MessageChunk => 1
-      && typeof u === "object"
-      && u !== null
-      && hasKey(u, "oldest")
-      && hasKey(u, "latest")
-      && hasKey(u, "finishedAt")
-      && isTS(u.oldest)
-      && isTS(u.latest)
-      && typeof u.finishedAt === "number";
+      && object.is(u)
+      && object.hasTKey(u, "oldest", Timestamp.is)
+      && object.hasTKey(u, "latest", Timestamp.is)
+      && object.hasTKey(u, "finishedAt", string.is)
 }
 
 export class sProgress {
-   fileFinishedAt: {[id: string]: number};
-   fileInProgress: FileInProgress | null;
+   fileCompletions: {[id: string]: number};
+   fileInProgress: FileInProgress;
    messageChunks: MessageChunk[];
 
    static default: sProgress = {
-      fileFinishedAt: {},
+      fileCompletions: {},
       fileInProgress: null,
       messageChunks: [],
    };
 
-   static fromAny(u: unknown): sProgress {
-      const sPJ = "progress_json";
-      if (typeof u !== "object")
-         throw new TypeError(`${sPJ} must be an Object!`);
-
-      if (u === null)
-         throw new TypeError(`${sPJ} must not be null!`);
-
-      if (!hasKey(u, "fileFinishedAt"))
-         throw new TypeError(`${sPJ}.files must exist!`);
-
-      if (typeof u.fileFinishedAt !== "object")
-         throw new TypeError(`${sPJ}.files must be an Object!`);
-
-      // we're not gonna check progress_json.files because we don't actually end
-      // up using it. it's entirely for the user's purposes.
-
-      if (!hasKey(u, "fileInProgress"))
-         throw new TypeError(`${sPJ}.fileInProgress must exist!`);
-
-      if (!FileInProgress.is(u.fileInProgress))
-         throw new TypeError(`${sPJ}.fileInProgress is not a FileInProgress!`)
-
-      if (!hasKey(u, "messageChunks"))
+   static parse(u: unknown): sProgress {
+      if (!object.is(u))
+         throw new TypeError(`progress_json must be an object!`);
+      if (!object.hasTKey(u, "fileCompletions", FileCompletions.is))
+         throw new TypeError("progress_json.fileCompletions must be a FileCompletions!");
+      if (!object.hasTKey(u, "fileInProgress", FileInProgress.is))
+         throw new TypeError("progress_json.fileInProgress must be a FileInProgress!");
+      if (!object.hasTKey(u, "messageChunks", array.isTC(MessageChunk.is)))
          throw new TypeError("progress_json.messageChunks must exist!");
 
-      if (!isArray(u.messageChunks))
-         throw new TypeError("progress_json.messageChunks must be an Array!");
+      if (u.messageChunks.length > 1) {
+         const s = "progress_json.messageChunks";
+         const len = u.messageChunks.length;
+         var lastLatest = u.messageChunks[0].latest;
+         for (let i = 1; i < len; ++i) {
+            const curr = u.messageChunks[i];
+            if (lastLatest !== curr.oldest) {
+               throw new Error(`Gap between ${s}[${i - 1}] and ${s}[${i}]!`);
+            }
+            lastLatest = curr.latest;
+         }
+      }
 
-      if (!isTArray(u.messageChunks, MessageChunk.is))
-         throw new TypeError("progress_json.messageChunks must be an Array of MessageChunks!")
-
-      return u as any;
+      return u;
    }
 }
