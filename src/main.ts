@@ -1,114 +1,145 @@
 import * as io from "./io";
 import {sConfig} from "./sConfig";
 
-var config: sConfig;
+var config_json: sConfig;
 {
    const filename = `${__dirname}/config.json`;
-   const res = io.open(filename, io.C.O_RDONLY);
-   switch (res.tag) {
+   const opened = io.open(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
+   switch (opened.tag) {
    case "create":
       io.errs("You did not make a config file so I made one for you.");
-      io.writeToJSON(res.fd, sConfig.default);
-      io.errs(`Your config file is at ${filename}.`);
+      io.writeToJSON(opened.fd, sConfig.default);
+      io.errs(`Your config file is at "${filename}".`);
       process.exit(1);
    case "error":
-      io.errs(res.error.toString());
-      io.errs(`There was an error obtaining a handle to ${filename}.`);
+      io.errs(opened.error.toString());
+      io.errs(`There was an error obtaining a handle to "${filename}".`);
       process.exit(1);
    case "open":
-      const parsed = io.readStruct(res.fd, sConfig);
+      const parsed = io.readStruct(opened.fd, sConfig);
       if (parsed === null) {
-         io.errs(`There was an error reading the structured JSON inside ${filename}.`);
+         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
          io.errs("Either correct it or remove it manually.");
          process.exit(1);
       }
-      config = parsed;
+      config_json = parsed;
    }
-   io.close(res.fd);
+   io.close(opened.fd);
 }
 
 import {WebClient, Channel, Timestamp} from "./slack";
-const client = new WebClient(config.userToken);
-const allConversations = {types: "public_channel,private_channel,mpim,im"};
+const client = new WebClient(config_json.userToken);
 
-import {sProgress} from "./sProgress";
-import {sMessages} from "./sMessages";
+const archiveDir = config_json.archiveDir;
+io.mkdirDeep(archiveDir);
+
 import {sChannels} from "./sChannels";
-import {object} from "./types";
-const archiveDir = config.archiveDir;
-
-namespace channels_json {
-   const path = `${archiveDir}/channels.json`;
-   export var fd: number;
-   export var o: sChannels;
-   const res = io.open(path, io.C.O_RDWR);
-   switch (res.tag) {
-   case "create":
-      res
-      break;
-   case "open":
-      fd = res.fd;
-      try {
-         o = io.readStruct(fd, sChannels);
-      }
-      catch (e) {
-         io.errs(String(e));
-         io.errs(`There was an error reading the structured JSON inside ${path}.`);
-         io.errs("Correct the JSON or delete the file manually.");
-      }
-      break;
-   case "error":
-      io.errs(res.error.toString());
-      io.errs(`There was an error opening ${path}.`);
-      io.errs("Did you do something funny with permissions?");
-      break;
+var channels_json: sChannels;
+var channels_json_fd: io.fd;
+{
+   const filename = `${archiveDir}/channels.json`;
+   const opened = io.open(filename, io.C.O_RDWR);
+   if (opened.tag === "error") {
+      io.errs(`Couldn't open "${filename}".`);
+      process.exit(1);
    }
+   channels_json_fd = opened.fd;
+
+   const parsed = io.readStruct(channels_json_fd, sChannels);
+   if (parsed === null) {
+      io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+      process.exit(1);
+   }
+   channels_json = parsed;
 }
 
+import {MessageChunks, sProgress} from "./sProgress";
+import {sMessages} from "./sMessages";
+import {object, string, u64} from "./types";
+import {sleep} from "./util";
 
 async function archiveChannel(chan: Channel): Promise<void> {
-   if (chan.id === undefined)
-      throw new TypeError("chan.id was undefined!");
+   if (!object.hasTKey(chan, "id", string.is))
+      throw new TypeError("chan.id must be a string!");
+
    const chanDir = `${archiveDir}/${chan.id}`;
-   const progress_json = `${chanDir}/progress.json`;
-   const messages_json = `${chanDir}/messages.json`;
+   io.mkdirDeep(chanDir);
 
-   io.puts("archiving from the past");
+   var progress_json: sProgress;
+   var progress_json_fd: io.fd;
+   {
+      const filename = `${chanDir}/progress.json`;
+      const opened = io.open(filename, io.C.O_RDWR);
+      if (opened.tag === "error") {
+         io.errs(`There was an error obtaining a handle to "${filename}".`);
+         process.exit(1);
+      }
+      progress_json_fd = opened.fd;
 
-   var lastLatest: Timestamp | null = null;
+      const parsed = io.readStruct(progress_json_fd, sProgress);
+      if (parsed === null) {
+         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+         process.exit(1);
+      }
+      progress_json = parsed;
+   }
 
-   do {
+   var messages_json: sMessages;
+   var messages_json_fd: io.fd;
+   {
+      const filename = `${chanDir}/messages.json`;
+      const opened = io.open(filename, io.C.O_RDWR);
+      if (opened.tag === "error") {
+         io.errs(`There was an error obtaining a handle to "${filename}".`);
+         process.exit(1);
+      }
+      messages_json_fd = opened.fd;
+
+      const parsed = io.readStruct(messages_json_fd, sMessages);
+      if (parsed === null) {
+         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+         process.exit(1);
+      }
+      messages_json = parsed;
+   }
+
+   // start archiving from the last known message
+   const m = progress_json.messageChunks;
+   var i = 0;
+   while (true) {
       await sleep(3);
-
-      const oProgress = io.readStructOrDefault(progress_json, sProgress);
-      var res = await client.conversations.history({
-         channel: chan.id,
-         latest: oProgress.messageLatestTimestamp,
-      });
-
-      const oMessages = io.readStructOrDefault(messages_json, sMessages);
-      for (const msg of res.messages) {
-         expect(msg.ts, "msg.ts was undefined!");
-         if (object.hasKey(oProgress.messages, msg.ts)) {
-            continue;
-         }
-
-         sMessages.insert(oMessages, msg);
-         oProgress.messageLatestTimestamp = msg.ts;
-         oProgress.messages[msg.ts] = {status: "Finished", finishedAt: Date.now()};
+      if (i === MessageChunks.shadowLength(m)) break;
+      const a = MessageChunks.shadow(m, i);
+      const b = MessageChunks.shadow(m, i);
+      if (a.latest === b.oldest) {
+         io.puts(`OKAY ${a.latest} -> ${b.oldest}`)
+         i++;
+         continue;
       }
 
-      io.writeToJSONDeep(messages_json, oMessages);
-      io.writeToJSONDeep(progress_json, oProgress);
+      io.puts(`WANT ${a.latest} -> ${b.oldest}`);
+      const res = await client.conversations.history({
+         channel: chan.id,
+         oldest: a.latest,
+         latest: b.oldest,
+         inclusive: true,
+         limit: u64.to_i32(config_json.messageChunkSize),
+      });
 
-      throw 69;
-   } while (res.has_more);
+      if (!res.has_more) {
+         
+      }
 
-   const oChannels = io.readStructOrDefault(channels_json, sChannels);
-   oChannels.push(chan);
-   io.writeToJSONDeep(channels_json, oChannels);
+      io.writeToJSON(messages_json_fd, messages_json);
+      io.writeToJSON(progress_json_fd, progress_json);
+   }
+
+   channels_json[chan.id] = chan;
+   io.close(messages_json_fd);
+   io.close(progress_json_fd);
 }
 
+const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
    const conversations = await client.users.conversations(allConversations);
    if (conversations.channels === undefined)
@@ -116,4 +147,6 @@ void async function main(): Promise<void> {
 
    for (const chan of conversations.channels)
       await archiveChannel(chan);
+
+   io.close(channels_json_fd);
 }();

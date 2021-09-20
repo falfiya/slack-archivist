@@ -16,15 +16,20 @@ type Error  = {tag: "error" ; error: Error};
  * remember to mkdirDeep before calling this
  * @param mode should not include O_CREAT
  */
-export function open(path: string, mode: number): Open | Create | Error {
+export function open
+( path : string
+, mode1: number
+, mode2: number = mode1 | fs.constants.O_CREAT
+): Open | Create | Error
+{
    try {
-      const fd = fs.openSync(path, mode) as fd;
+      const fd = fs.openSync(path, mode1) as fd;
       return {tag: "open", fd};
    }
    catch (_) {}
 
    try {
-      const fd = fs.openSync(path, mode | fs.constants.O_CREAT) as fd;
+      const fd = fs.openSync(path, mode2) as fd;
       return {tag: "create", fd};
    }
    catch (error: any) {

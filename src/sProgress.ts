@@ -36,6 +36,30 @@ export namespace MessageChunk {
       && object.hasTKey(u, "oldest", Timestamp.is)
       && object.hasTKey(u, "latest", Timestamp.is)
       && object.hasTKey(u, "finishedAt", string.is)
+
+   export type Shadow = {
+      oldest?: string | number;
+      latest?: string | number;
+   };
+}
+
+export type MessageChunks = MessageChunk[];
+export namespace MessageChunks {
+   export const is = array.isTC(MessageChunk.is);
+
+   export const shadowLength = (m: MessageChunks) => m.length + 2;
+
+   export function shadow(m: MessageChunks, idx: number): MessageChunk.Shadow {
+      if (idx === 0)
+         return {latest: NaN};
+      if (idx === m.length)
+         return {oldest: NaN};
+      else
+         return m[idx + 1];
+   }
+
+
+   export function insert
 }
 
 export class sProgress {
@@ -56,21 +80,8 @@ export class sProgress {
          throw new TypeError("progress_json.fileCompletions must be a FileCompletions!");
       if (!object.hasTKey(u, "fileInProgress", FileInProgress.is))
          throw new TypeError("progress_json.fileInProgress must be a FileInProgress!");
-      if (!object.hasTKey(u, "messageChunks", array.isTC(MessageChunk.is)))
+      if (!object.hasTKey(u, "messageChunks", MessageChunks.is))
          throw new TypeError("progress_json.messageChunks must exist!");
-
-      if (u.messageChunks.length > 1) {
-         const s = "progress_json.messageChunks";
-         const len = u.messageChunks.length;
-         var lastLatest = u.messageChunks[0].latest;
-         for (let i = 1; i < len; ++i) {
-            const curr = u.messageChunks[i];
-            if (lastLatest !== curr.oldest) {
-               throw new Error(`Gap between ${s}[${i - 1}] and ${s}[${i}]!`);
-            }
-            lastLatest = curr.latest;
-         }
-      }
 
       return u;
    }

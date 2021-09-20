@@ -39,6 +39,8 @@ export namespace u64 {
 
       return parsed;
    }
+
+   export const to_i32 = (u: u64) => Number(BigInt.asIntN(32, u))|0;
 }
 
 export namespace string {
