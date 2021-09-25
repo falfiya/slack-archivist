@@ -26,6 +26,13 @@ export namespace Timestamp {
       new Date(+ts.replace('.', "").slice(0, -3));
 }
 
+import {object} from "./types";
+export type TimestampContainer = {ts: Timestamp};
+export namespace TimestampContainer {
+   export const is = (u: unknown): u is TimestampContainer =>
+      object.is(u) && object.hasTKey(u, "ts", Timestamp.is);
+}
+
 import {WebClient} from "@slack/web-api";
 export const messageExists =
    (client: WebClient, channel: string, ts: Timestamp): Promise<boolean> =>

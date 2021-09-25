@@ -1,13 +1,9 @@
-import {Message, Timestamp} from "./slack";
-import {array, object} from "./types";
+import {array} from "./types";
+import {Message, Timestamp, TimestampContainer} from "./slack";
 
-type TimestampContainer = {ts: Timestamp};
-namespace TimestampContainer {
-   export const is = (u: unknown): u is TimestampContainer =>
-      object.is(u) && object.hasTKey(u, "ts", Timestamp.is);
-}
+export type TsMessage = Message & TimestampContainer;
 
-export class sMessages extends Array<Message> {
+export class sMessages extends Array<TsMessage> {
    static default: sMessages = [];
 
    static parse(u: unknown): sMessages {
@@ -24,7 +20,7 @@ export class sMessages extends Array<Message> {
       return u;
    }
 
-   static insert(into: sMessages, msg: Message): boolean {
+   static insert(into: sMessages, msg: TsMessage): boolean {
       var upper = into.length - 1;
 
       if (upper === -1) {
@@ -32,27 +28,26 @@ export class sMessages extends Array<Message> {
          return true;
       }
 
-      if (msg.ts! < into[0].ts!) {
+      if (msg.ts < into[0].ts) {
          into.unshift(msg);
          return true;
       }
 
-      if (msg.ts! > into[upper].ts!) {
+      if (msg.ts > into[upper].ts) {
          into.push(msg);
          return true;
       }
-
 
       var lower = 1;
       // otherwise binary insert it
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
-         if (msg.ts! < into[pivot].ts!) {
+         if (msg.ts < into[pivot].ts) {
             upper = pivot;
             continue;
          }
-         if (msg.ts! > into[pivot].ts!) {
+         if (msg.ts > into[pivot].ts) {
             lower = pivot + 1;
             continue;
          }

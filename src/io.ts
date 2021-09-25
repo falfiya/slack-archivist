@@ -1,9 +1,6 @@
 import * as fs from "fs";
 export {constants as C} from "fs";
 
-import {Struct} from "./types";
-import {toJSON} from "./util";
-
 declare const fd_s: unique symbol;
 export type fd_o = {[fd_s]: void};
 export type fd = fd_o & number;
@@ -45,11 +42,15 @@ export function mkdirDeep(path: string): void {
    fs.mkdirSync(path, {recursive: true});
 }
 
+import {Struct} from "./types";
+
 export function readStruct<T>
 (f: fs.PathOrFileDescriptor, recordType: Struct<T>)
 {
    return recordType.parse(JSON.parse(fs.readFileSync(f, "utf8")));
 }
+
+import {toJSON} from "./util";
 
 export function writeToJSON(fd: fd, what: any): void {
    fs.writeFileSync(fd, toJSON(what));
