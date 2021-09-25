@@ -1,9 +1,9 @@
 {
    "dependencies": {
       "@slack/web-api": "^6.4.0",
-      "json-bigint": "^1.0.0",
-      "readline-sync": "^1.4.10"
+      "json-bigint": "^1.0.0"
    },
+
    "devDependencies": {
       "@types/json-bigint": "^1.0.1",
       "@types/node": "^16.7.10",

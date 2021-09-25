@@ -12,8 +12,10 @@ export class sMessages extends Array<TsMessage> {
 
       var lastTs = Timestamp.MIN;
       for (const msg of u) {
-         if (msg.ts <= lastTs)
-            throw new Error("messages out of order!");
+         if (msg.ts === lastTs)
+            throw new TypeError("Duplicate messages!");
+         if (msg.ts < lastTs)
+            throw new TypeError("Messages out of order!");
          lastTs = msg.ts;
       }
 
@@ -28,11 +30,15 @@ export class sMessages extends Array<TsMessage> {
          return true;
       }
 
+
       if (msg.ts < into[0].ts) {
          into.unshift(msg);
          return true;
       }
 
+      if (msg.ts === into[upper].ts) {
+         return false
+      }
       if (msg.ts > into[upper].ts) {
          into.push(msg);
          return true;
@@ -43,17 +49,18 @@ export class sMessages extends Array<TsMessage> {
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
-         if (msg.ts < into[pivot].ts) {
+         console.log(`   pivot at ${into[pivot].text}`);
+
+         if (msg.ts === into[pivot].ts)
+            return false;
+
+         if (msg.ts < into[pivot].ts)
             upper = pivot;
-            continue;
-         }
-         if (msg.ts > into[pivot].ts) {
+         else
             lower = pivot + 1;
-            continue;
-         }
-         return false;
       }
 
+      console.log(`   inserted ${msg.text!} by binsert`);
       into.splice(lower, 0, msg);
       return true;
    }

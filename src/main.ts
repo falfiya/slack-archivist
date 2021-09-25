@@ -1,9 +1,10 @@
 import * as io from "./io";
 import {sConfig} from "./sConfig";
 
+const cwd = process.cwd();
 var config_json: sConfig;
 {
-   const filename = `${__dirname}/config.json`;
+   const filename = `${cwd}/config.json`;
    const opened = io.open(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
    switch (opened.tag) {
    case "create":
@@ -39,18 +40,25 @@ var channels_json_fd: io.fd;
 {
    const filename = `${archiveDir}/channels.json`;
    const opened = io.open(filename, io.C.O_RDWR);
-   if (opened.tag === "error") {
+   switch (opened.tag) {
+   case "create":
+      channels_json_fd = opened.fd;
+      channels_json = sChannels.default;
+      io.writeToJSON(channels_json_fd, channels_json);
+      break;
+   case "open":
+      channels_json_fd = opened.fd;
+      const parsed = io.readStruct(channels_json_fd, sChannels);
+      if (parsed === null) {
+         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+         process.exit(1);
+      }
+      channels_json = parsed;
+      break;
+   case "error":
       io.errs(`Couldn't open "${filename}".`);
       process.exit(1);
    }
-   channels_json_fd = opened.fd;
-
-   const parsed = io.readStruct(channels_json_fd, sChannels);
-   if (parsed === null) {
-      io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-      process.exit(1);
-   }
-   channels_json = parsed;
 }
 
 import {ChunkCollection, sProgress} from "./sProgress";
@@ -62,6 +70,9 @@ async function archiveChannel(chan: Channel): Promise<void> {
    if (!object.hasTKey(chan, "id", string.is))
       throw new TypeError("chan.id must be a string!");
 
+   channels_json[chan.id] = chan;
+   io.writeToJSON(channels_json_fd, channels_json);
+
    const chanDir = `${archiveDir}/${chan.id}`;
    io.mkdirDeep(chanDir);
 
@@ -70,18 +81,25 @@ async function archiveChannel(chan: Channel): Promise<void> {
    {
       const filename = `${chanDir}/progress.json`;
       const opened = io.open(filename, io.C.O_RDWR);
-      if (opened.tag === "error") {
+      switch (opened.tag) {
+      case "create":
+         progress_json_fd = opened.fd;
+         progress_json = sProgress.default;
+         io.writeToJSON(progress_json_fd, progress_json);
+      break;
+      case "open":
+         progress_json_fd = opened.fd;
+         const parsed = io.readStruct(progress_json_fd, sProgress);
+         if (parsed === null) {
+            io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+            process.exit(1);
+         }
+         progress_json = parsed;
+      break;
+      case "error":
          io.errs(`There was an error obtaining a handle to "${filename}".`);
          process.exit(1);
       }
-      progress_json_fd = opened.fd;
-
-      const parsed = io.readStruct(progress_json_fd, sProgress);
-      if (parsed === null) {
-         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-         process.exit(1);
-      }
-      progress_json = parsed;
    }
 
    var messages_json: sMessages;
@@ -89,46 +107,55 @@ async function archiveChannel(chan: Channel): Promise<void> {
    {
       const filename = `${chanDir}/messages.json`;
       const opened = io.open(filename, io.C.O_RDWR);
-      if (opened.tag === "error") {
+      switch (opened.tag) {
+      case "create":
+         messages_json_fd = opened.fd ;
+         messages_json = sMessages.default;
+         io.writeToJSON(messages_json_fd, messages_json);
+      break;
+      case "open":
+         messages_json_fd = opened.fd ;
+         const parsed = io.readStruct(messages_json_fd, sMessages);
+         if (parsed === null) {
+            io.errs(`There was an error reading the structured JSON inside "${filename}".`);
+            process.exit(1);
+         }
+         messages_json = parsed;
+      break;
+      case "error":
          io.errs(`There was an error obtaining a handle to "${filename}".`);
          process.exit(1);
       }
-      messages_json_fd = opened.fd ;
-
-      const parsed = io.readStruct(messages_json_fd, sMessages);
-      if (parsed === null) {
-         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-         process.exit(1);
-      }
-      messages_json = parsed;
    }
 
    // start archiving from the last known message
    const cc = progress_json.messageChunks;
-   var i = 0;
+   var shadowIndex = 0;
    while (true) {
       await sleep(3);
-      if (i === ChunkCollection.shadowLength(cc)) break;
-      const a = ChunkCollection.shadow(cc, i);
-      const b = ChunkCollection.shadow(cc, i);
 
-      if (a.latest === b.oldest)
-      if (a.latest !== undefined) // guard for not start of time
-      if (b.oldest !== undefined) // guard for not end of time (not required)
+      if (shadowIndex > ChunkCollection.gapMax(cc))
+         break;
+
+      const gap = ChunkCollection.getGap(cc, shadowIndex);
+      const paramOldest = gap.oldest;
+      const paramLatest = gap.latest;
+
+      if (paramOldest === paramLatest)
+      if (paramOldest !== void 0) // guard for not start of time
+      if (paramLatest !== void 0) // guard for not end of time (not required)
       {
-         io.puts(`OKAY ${a.latest} -> ${b.oldest}`)
-         i++;
+         io.puts(`OKAY ${paramOldest} -> ${paramLatest}`)
+         shadowIndex++;
          continue;
       }
 
-      var oldest = a.latest;
-      var latest = b.oldest;
-      io.puts(`WANT ${a.latest} -> ${b.oldest}`);
+      io.puts(`GET  ${paramOldest} -> ${paramLatest}`);
       const res = await client.conversations.history({
          channel: chan.id,
-         oldest,
-         latest,
-         // inclusive: true,
+         oldest: paramOldest,
+         latest: paramLatest,
+         inclusive: true,
          limit: u64.to_i32(config_json.messageChunkSize),
       });
 
@@ -138,7 +165,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
       }
 
       const len = res.messages.length;
-      for (var i = 0; i < len; ++i) {
+      for (let i = 0; i < len; ++i) {
          const m = res.messages[i];
          if (!object.hasTKey(m, "ts", Timestamp.is)) {
             throw new TypeError("message was missing Timestamp!");
@@ -190,19 +217,31 @@ async function archiveChannel(chan: Channel): Promise<void> {
          }
       }
 
-      // When do we want to use the true oldest and latest?
-      // Well, at least if the parameter oldest and latest were undefined, we
-      // would probably like to use them.
-      oldest ??= trueOldest;
-      latest ??= trueLatest;
+      const finishedAt = u64.from(Date.now());
+      if (res.has_more) {
+         var chunk = {
+            oldest: trueOldest,
+            latest: trueLatest,
+            finishedAt,
+         }
+      } else {
+         // In most cases, we want to use the true oldest and latest. But when
+         // don't we? There is one case, and that's with filling gaps of no
+         // messages. I am unable to come up with a reason as to why this might
+         // happen but in the event that it could, here you go.
+         var chunk = {
+            oldest: paramOldest ?? trueOldest,
+            latest: paramLatest ?? trueLatest,
+            finishedAt,
+         };
+      }
 
-      // But wait, what about if we fetch a giant gap?
+      ChunkCollection.insert(cc, chunk);
 
       io.writeToJSON(messages_json_fd, messages_json);
       io.writeToJSON(progress_json_fd, progress_json);
    }
 
-   channels_json[chan.id] = chan;
    io.close(messages_json_fd);
    io.close(progress_json_fd);
 }

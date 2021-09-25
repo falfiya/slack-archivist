@@ -43,17 +43,21 @@ export function mkdirDeep(path: string): void {
 }
 
 import {Struct} from "./types";
+import {fromJSON, toJSON} from "./util";
 
 export function readStruct<T>
 (f: fs.PathOrFileDescriptor, recordType: Struct<T>)
 {
-   return recordType.parse(JSON.parse(fs.readFileSync(f, "utf8")));
+   try {
+      return recordType.parse(fromJSON(fs.readFileSync(f, "utf8")));
+   } catch (e: any) {
+      errs(e.toString());
+      return null;
+   }
 }
 
-import {toJSON} from "./util";
-
 export function writeToJSON(fd: fd, what: any): void {
-   fs.writeFileSync(fd, toJSON(what));
+   fs.writeSync(fd, toJSON(what), 0);
 }
 
 export function puts(str: string) {

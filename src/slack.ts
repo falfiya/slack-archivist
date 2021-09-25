@@ -8,9 +8,8 @@ declare const timestamp_s: unique symbol;
 export type timestamp_o = {[timestamp_s]: void};
 /** slack timestamp */
 export type Timestamp = timestamp_o & string;
-const reSlackTimeStamp = /^\d{10}\.\d{6}$/;
 export namespace Timestamp {
-   export const MIN = from("0000000000.000000");
+   const reSlackTimeStamp = /^\d{10}\.\d{6}$/;
 
    export const is = (u: unknown): u is Timestamp =>
       typeof u === "string" && reSlackTimeStamp.test(u);
@@ -24,6 +23,8 @@ export namespace Timestamp {
 
    export const toDate = (ts: Timestamp): Date =>
       new Date(+ts.replace('.', "").slice(0, -3));
+
+   export const MIN = from("0000000000.000000");
 }
 
 import {object} from "./types";

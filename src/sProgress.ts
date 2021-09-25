@@ -26,7 +26,6 @@ namespace FileInProgress {
 
 export type MessageChunk = {
    oldest: Timestamp;
-   /** up to but not including */
    latest: Timestamp;
    finishedAt: u64;
 }
@@ -36,64 +35,64 @@ export namespace MessageChunk {
       && object.is(u)
       && object.hasTKey(u, "oldest", Timestamp.is)
       && object.hasTKey(u, "latest", Timestamp.is)
-      && object.hasTKey(u, "finishedAt", string.is)
-
-   export type Shadow = {
-      oldest?: string;
-      latest?: string;
-   };
+      && object.parseTKey(u, "finishedAt", u64.parse)
 }
 
 export type ChunkCollection = MessageChunk[];
 export namespace ChunkCollection {
    export const is = array.isTC(MessageChunk.is);
 
-   export const shadowLength = (cc: ChunkCollection) => cc.length + 2;
+   export type Gap = {
+      oldest?: Timestamp;
+      latest?: Timestamp;
+   };
 
-   export function shadow(cc: ChunkCollection, idx: number): MessageChunk.Shadow {
-      if (idx === 0)
-         return {};
-      if (idx === cc.length)
-         return {};
-      else
-         return cc[idx + 1];
+   export const gapMax = (cc: ChunkCollection) => cc.length;
+
+   export function getGap(cc: ChunkCollection, idx: number): Gap {
+      return {
+         oldest: cc[idx - 1]?.latest,
+         latest: cc[idx]?.oldest,
+      };
    }
 
    export function insert(into: ChunkCollection, m: MessageChunk): boolean {
-      var upper = into.length - 1;
+      const last = into.length - 1;
 
       // empty
-      if (upper === -1) {
+      if (last === -1) {
          into.push(m);
          return true;
       }
 
       // first
-      if (m.latest <= into[0].oldest) {
-         into.unshift(m);
-         return true;
-      }
-
+      if (m.latest <= into[0].oldest)
+         var insertAt = 0;
+      else
       // last
-      if (m.oldest >= into[upper].latest) {
-         into.push(m);
-         return true;
-      }
-
+      if (m.oldest >= into[last].latest)
+         var insertAt = last;
+      else
       // somewhere in the middle
-      var lower = 1;
-      while (lower !== upper) {
-         const halfLength = upper - lower >> 1;
-         const pivot = lower + halfLength;
-         if (m.latest <= into[pivot].oldest) {
-            upper = pivot;
-            continue;
+      {
+         let lower = 1;
+         let upper = last;
+
+         while (lower !== upper) {
+            const halfLength = upper - lower >> 1;
+            const pivot = lower + halfLength;
+            if (m.latest <= into[pivot].oldest) {
+               upper = pivot;
+               continue;
+            }
+            if (m.oldest >= into[pivot].latest) {
+               lower = pivot + 1;
+               continue;
+            }
+            return false;
          }
-         if (m.oldest >= into[pivot].latest) {
-            lower = pivot + 1;
-            continue;
-         }
-         return false;
+
+         var insertAt = lower;
       }
 
       // normally, we couldn't guarantee that lower is a valid index into the
@@ -110,10 +109,10 @@ export namespace ChunkCollection {
       // we must check that it can comfortably fit between
       // into[lower - 1] and into[lower].
 
-      if (into[lower - 1].latest <= m.oldest)
-      if (into[lower + 0].oldest >= m.latest)
+      if (into[insertAt - 1].latest <= m.oldest)
+      if (into[insertAt + 0].oldest >= m.latest)
       {
-         into.splice(lower, 0, m);
+         into.splice(insertAt, 0, m);
          return true;
       }
 
