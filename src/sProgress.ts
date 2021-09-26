@@ -1,5 +1,5 @@
 import {Timestamp} from "./slack";
-import {string, object, array, u64} from "./types";
+import {object, array, u64} from "./types";
 
 export type FileCompletions = {[id: string]: number};
 namespace FileCompletions {
@@ -8,19 +8,24 @@ namespace FileCompletions {
 }
 
 export type FileInProgress = {
-   id: string;
    bytesDownloaded: u64;
    bytesNeeded: u64;
-} | null;
+};
 
 namespace FileInProgress {
    export function is(u: unknown): u is FileInProgress {
       if (typeof u !== "object") return false;
-      if (u === null) return true;
+      if (u === null) return false;
       return 1
-         && object.hasTKey(u, "id", string.is)
          && object.parseTKey(u, "bytesDownloaded", u64.parse)
          && object.parseTKey(u, "bytesNeeded", u64.parse)
+   }
+}
+
+export type FilesInProgress = {[id: string]: FileInProgress};
+export namespace FilesInProgress {
+   export function is(u: unknown): u is FilesInProgress {
+      return object.is(u);
    }
 }
 
@@ -57,42 +62,40 @@ export namespace ChunkCollection {
    }
 
    export function insert(into: ChunkCollection, m: MessageChunk): boolean {
-      const last = into.length - 1;
+      var upper = into.length - 1;
 
       // empty
-      if (last === -1) {
+      if (upper === -1) {
          into.push(m);
          return true;
       }
 
       // first
-      if (m.latest <= into[0].oldest)
-         var insertAt = 0;
-      else
+      if (m.latest <= into[0].oldest) {
+         into.unshift(m);
+         return true;
+      }
+
       // last
-      if (m.oldest >= into[last].latest)
-         var insertAt = last;
-      else
+      if (m.oldest >= into[upper].latest) {
+         into.push(m);
+         return true;
+      }
+
       // somewhere in the middle
-      {
-         let lower = 1;
-         let upper = last;
-
-         while (lower !== upper) {
-            const halfLength = upper - lower >> 1;
-            const pivot = lower + halfLength;
-            if (m.latest <= into[pivot].oldest) {
-               upper = pivot;
-               continue;
-            }
-            if (m.oldest >= into[pivot].latest) {
-               lower = pivot + 1;
-               continue;
-            }
-            return false;
+      var lower = 1;
+      while (lower !== upper) {
+         const halfLength = upper - lower >> 1;
+         const pivot = lower + halfLength;
+         if (m.latest <= into[pivot].oldest) {
+            upper = pivot;
+            continue;
          }
-
-         var insertAt = lower;
+         if (m.oldest >= into[pivot].latest) {
+            lower = pivot + 1;
+            continue;
+         }
+         return false;
       }
 
       // normally, we couldn't guarantee that lower is a valid index into the
@@ -109,10 +112,10 @@ export namespace ChunkCollection {
       // we must check that it can comfortably fit between
       // into[lower - 1] and into[lower].
 
-      if (into[insertAt - 1].latest <= m.oldest)
-      if (into[insertAt + 0].oldest >= m.latest)
+      if (into[lower - 1].latest <= m.oldest)
+      if (into[lower + 0].oldest >= m.latest)
       {
-         into.splice(insertAt, 0, m);
+         into.splice(lower, 0, m);
          return true;
       }
 
@@ -122,12 +125,12 @@ export namespace ChunkCollection {
 
 export class sProgress {
    fileCompletions: {[id: string]: number};
-   fileInProgress: FileInProgress;
+   filesInProgress: {[id: string]: FileInProgress};
    messageChunks: MessageChunk[];
 
    static default: sProgress = {
       fileCompletions: {},
-      fileInProgress: null,
+      filesInProgress: {},
       messageChunks: [],
    };
 
@@ -136,7 +139,7 @@ export class sProgress {
          throw new TypeError(`progress_json must be an object!`);
       if (!object.hasTKey(u, "fileCompletions", FileCompletions.is))
          throw new TypeError("progress_json.fileCompletions must be a FileCompletions!");
-      if (!object.hasTKey(u, "fileInProgress", FileInProgress.is))
+      if (!object.hasTKey(u, "filesInProgress", FilesInProgress.is))
          throw new TypeError("progress_json.fileInProgress must be a FileInProgress!");
       if (!object.hasTKey(u, "messageChunks", ChunkCollection.is))
          throw new TypeError("progress_json.messageChunks must exist!");

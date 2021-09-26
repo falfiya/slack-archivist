@@ -13,7 +13,7 @@ type Error  = {tag: "error" ; error: Error};
  * remember to mkdirDeep before calling this
  * @param mode should not include O_CREAT
  */
-export function open
+export function open2
 ( path : string
 , mode1: number
 , mode2: number = mode1 | fs.constants.O_CREAT
@@ -42,7 +42,7 @@ export function mkdirDeep(path: string): void {
    fs.mkdirSync(path, {recursive: true});
 }
 
-import {Struct} from "./types";
+import {Struct, u64} from "./types";
 import {fromJSON, toJSON} from "./util";
 
 export function readStruct<T>
@@ -54,6 +54,10 @@ export function readStruct<T>
       errs(e.toString());
       return null;
    }
+}
+
+export function write(fd: fd, buf: Buffer, length: number, offset: number): void {
+   fs.writeSync(fd, buf, 0, length, offset);
 }
 
 export function writeToJSON(fd: fd, what: any): void {

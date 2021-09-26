@@ -1,13 +1,11 @@
 import {array} from "./types";
-import {Message, Timestamp, TimestampContainer} from "./slack";
+import {Timestamp, DecentMessage} from "./slack";
 
-export type TsMessage = Message & TimestampContainer;
-
-export class sMessages extends Array<TsMessage> {
+export class sMessages extends Array<DecentMessage> {
    static default: sMessages = [];
 
    static parse(u: unknown): sMessages {
-      if (!array.isT(u, TimestampContainer.is))
+      if (!array.isT(u, DecentMessage.is))
          throw new TypeError("messages_json must be an array of TimestampObject!");
 
       var lastTs = Timestamp.MIN;
@@ -22,7 +20,7 @@ export class sMessages extends Array<TsMessage> {
       return u;
    }
 
-   static insert(into: sMessages, msg: TsMessage): boolean {
+   static insert(into: sMessages, msg: DecentMessage): boolean {
       var upper = into.length - 1;
 
       if (upper === -1) {
@@ -30,7 +28,9 @@ export class sMessages extends Array<TsMessage> {
          return true;
       }
 
-
+      if (msg.ts === into[0].ts) {
+         return false;
+      }
       if (msg.ts < into[0].ts) {
          into.unshift(msg);
          return true;
@@ -50,15 +50,21 @@ export class sMessages extends Array<TsMessage> {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
          console.log(`   pivot at ${into[pivot].text}`);
-
-         if (msg.ts === into[pivot].ts)
-            return false;
-
-         if (msg.ts < into[pivot].ts)
+         if (msg.ts < into[pivot].ts) {
             upper = pivot;
-         else
+            continue;
+         }
+         if (msg.ts > into[pivot].ts) {
             lower = pivot + 1;
+            continue;
+         }
+         return false;
       }
+
+      // invariant: check if the message is the same as the two next to it
+      if (msg.ts === into[lower - 1].ts)
+      if (msg.ts === into[lower + 0].ts)
+         return false;
 
       console.log(`   inserted ${msg.text!} by binsert`);
       into.splice(lower, 0, msg);

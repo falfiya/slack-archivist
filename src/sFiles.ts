@@ -1,6 +1,6 @@
-import {File} from "./slack";
+import {DecentFile} from "./slack";
 
-export class sFiles extends Array<File> {
+export class sFiles extends Array<DecentFile> {
    static default: sFiles = [];
 
    static parse(u: unknown): sFiles {

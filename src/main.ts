@@ -5,7 +5,7 @@ const cwd = process.cwd();
 var config_json: sConfig;
 {
    const filename = `${cwd}/config.json`;
-   const opened = io.open(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
+   const opened = io.open2(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
    switch (opened.tag) {
    case "create":
       io.errs("You did not make a config file so I made one for you.");
@@ -28,8 +28,8 @@ var config_json: sConfig;
    io.close(opened.fd);
 }
 
-import {WebClient, Channel, Timestamp, TimestampContainer} from "./slack";
-const client = new WebClient(config_json.userToken);
+import {CustomWebClient, Channel, Timestamp, DecentMessage, DecentFile} from "./slack";
+const client = new CustomWebClient(config_json.userToken);
 
 const archiveDir = config_json.archiveDir;
 io.mkdirDeep(archiveDir);
@@ -39,7 +39,7 @@ var channels_json: sChannels;
 var channels_json_fd: io.fd;
 {
    const filename = `${archiveDir}/channels.json`;
-   const opened = io.open(filename, io.C.O_RDWR);
+   const opened = io.open2(filename, io.C.O_RDWR);
    switch (opened.tag) {
    case "create":
       channels_json_fd = opened.fd;
@@ -64,7 +64,7 @@ var channels_json_fd: io.fd;
 import {ChunkCollection, sProgress} from "./sProgress";
 import {sMessages} from "./sMessages";
 import {array, object, string, u64} from "./types";
-import {sleep} from "./util";
+import {IncomingDownload, sleep} from "./util";
 
 async function archiveChannel(chan: Channel): Promise<void> {
    if (!object.hasTKey(chan, "id", string.is))
@@ -80,7 +80,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
    var progress_json_fd: io.fd;
    {
       const filename = `${chanDir}/progress.json`;
-      const opened = io.open(filename, io.C.O_RDWR);
+      const opened = io.open2(filename, io.C.O_RDWR);
       switch (opened.tag) {
       case "create":
          progress_json_fd = opened.fd;
@@ -106,7 +106,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
    var messages_json_fd: io.fd;
    {
       const filename = `${chanDir}/messages.json`;
-      const opened = io.open(filename, io.C.O_RDWR);
+      const opened = io.open2(filename, io.C.O_RDWR);
       switch (opened.tag) {
       case "create":
          messages_json_fd = opened.fd ;
@@ -159,7 +159,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
          limit: u64.to_i32(config_json.messageChunkSize),
       });
 
-      if (!object.hasTKey(res, "messages", array.isTC(TimestampContainer.is))) {
+      if (!object.hasTKey(res, "messages", array.isTC(DecentMessage.is))) {
          throw new TypeError(
             "conversations.history returned an object without the messages property!");
       }
@@ -173,6 +173,47 @@ async function archiveChannel(chan: Channel): Promise<void> {
 
          if (!sMessages.insert(messages_json, m)) {
             io.errs(`Already have ${m.ts}, skipping...`);
+            continue;
+         }
+
+         if (object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
+            io.puts("Message has files. Initiating download.");
+            for (const file of m.files) {
+               if (!DecentFile.is(file)) {
+                  io.errs(String(file));
+                  io.errs("This file sucks!");
+                  continue;
+               }
+
+               if (object.hasKey(progress_json.fileCompletions, file.id)) {
+                  io.puts(`Have ${file.id}, skipping!`);
+                  continue;
+               }
+
+               const thisFileDir = `${chanDir}/files/${file.id}`;
+               io.mkdirDeep(thisFileDir);
+               io.puts(`Downloading ${file.id}`);
+
+               const thisFile = `${thisFileDir}/${file.name}`;
+               const f = io.open2(thisFile, io.C.O_WRONLY);
+               if (f.tag === "error") {
+                  io.errs(`cannot open ${thisFile}`);
+                  continue;
+               }
+
+               const startingAt: u64 | undefined = progress_json.filesInProgress[file.id]?.bytesDownloaded;
+
+               const im = await client.downloadFile(file, startingAt);
+               const id = new IncomingDownload(im);
+               let offset = Number(id.rangeStart);
+               id.flow(b => {
+                  io.write(f.fd, b, b.length, offset);
+                  progress_json.filesInProgress[file.id] = 
+                  io.puts(`Wrote ${thisFile}[${offset}...${offset += b.length}]`);
+               });
+               await id.finished;
+               io.close(f.fd);
+            }
          }
       }
 
@@ -249,7 +290,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
    const conversations = await client.users.conversations(allConversations);
-   if (conversations.channels === undefined)
+   if (conversations.channels === void 0)
       throw new Error(conversations.error);
 
    for (const chan of conversations.channels)
