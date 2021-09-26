@@ -2,27 +2,13 @@ import {Timestamp} from "./slack";
 import {object, array, u64} from "./types";
 
 export type FileCompletions = {[id: string]: number};
-namespace FileCompletions {
-   export const is: (u: unknown) => u is FileCompletions =
-      object.is as any;
+export namespace FileCompletions {
+   export function is(u: unknown): u is FileCompletions {
+      return object.is(u);
+   };
 }
 
-export type FileInProgress = {
-   bytesDownloaded: u64;
-   bytesNeeded: u64;
-};
-
-namespace FileInProgress {
-   export function is(u: unknown): u is FileInProgress {
-      if (typeof u !== "object") return false;
-      if (u === null) return false;
-      return 1
-         && object.parseTKey(u, "bytesDownloaded", u64.parse)
-         && object.parseTKey(u, "bytesNeeded", u64.parse)
-   }
-}
-
-export type FilesInProgress = {[id: string]: FileInProgress};
+export type FilesInProgress = {[id: string]: u64};
 export namespace FilesInProgress {
    export function is(u: unknown): u is FilesInProgress {
       return object.is(u);
@@ -124,8 +110,8 @@ export namespace ChunkCollection {
 }
 
 export class sProgress {
-   fileCompletions: {[id: string]: number};
-   filesInProgress: {[id: string]: FileInProgress};
+   fileCompletions: FileCompletions;
+   filesInProgress: FilesInProgress;
    messageChunks: MessageChunk[];
 
    static default: sProgress = {

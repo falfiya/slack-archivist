@@ -46,10 +46,10 @@ export class sMessages extends Array<DecentMessage> {
 
       var lower = 1;
       // otherwise binary insert it
+      console.log(`trying to binary insert ${msg.ts}`);
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
-         console.log(`   pivot at ${into[pivot].text}`);
          if (msg.ts < into[pivot].ts) {
             upper = pivot;
             continue;
@@ -66,7 +66,7 @@ export class sMessages extends Array<DecentMessage> {
       if (msg.ts === into[lower + 0].ts)
          return false;
 
-      console.log(`   inserted ${msg.text!} by binsert`);
+      console.log(`binserted ${msg.ts}`);
       into.splice(lower, 0, msg);
       return true;
    }

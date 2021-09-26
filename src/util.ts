@@ -7,6 +7,11 @@ export function sleep(s: number) {
    return new Promise<void>(res => setTimeout(res, s * 1000));
 }
 
+export function sleep_ms(s: number) {
+   puts(`sleeping for ${s} ms`);
+   return new Promise<void>(res => setTimeout(res, s));
+}
+
 export const fromJSON = (json: string): unknown => J.parse(json);
 export const toJSON = (what: any): string => J.stringify(what, null, 3);
 
@@ -24,19 +29,22 @@ export class IncomingDownload {
       this.im = im;
       var cr = im.headers["content-range"];
       if (cr === undefined || !cr.startsWith("bytes ")) {
-         throw new TypeError("Bad content range");
-      }
+         // bad content range
+         this.rangeStart = 0n as u64;
+         this.rangeEnd = 0n as u64;
+         this.size = 0n as u64;
+      } else {
+         cr = cr.slice("bytes ".length);
+         const dash = cr.indexOf('-');
+         const slash = cr.indexOf('/');
+         if (dash === -1 || slash === -1) {
+            throw new TypeError(":scringe:");
+         }
 
-      cr = cr.slice("bytes ".length);
-      const dash = cr.indexOf('-');
-      const slash = cr.indexOf('/');
-      if (dash === -1 || slash === -1) {
-         throw new TypeError(":scringe:");
+         this.rangeStart = u64.from(cr.slice(0, dash));
+         this.rangeEnd   = u64.from(cr.slice(dash + 1, slash));
+         this.size       = u64.from(cr.slice(slash + 1));
       }
-
-      this.rangeStart = u64.from(cr.slice(0, dash));
-      this.rangeEnd   = u64.from(cr.slice(dash + 1, slash));
-      this.size       = u64.from(cr.slice(slash + 1));
 
       this.finished = new Promise((res, rej) => {
          im.on("close", () => res(false));

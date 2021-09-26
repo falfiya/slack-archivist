@@ -64,7 +64,8 @@ var channels_json_fd: io.fd;
 import {ChunkCollection, sProgress} from "./sProgress";
 import {sMessages} from "./sMessages";
 import {array, object, string, u64} from "./types";
-import {IncomingDownload, sleep} from "./util";
+import {IncomingDownload, sleep, sleep_ms} from "./util";
+import {IncomingMessage} from "http";
 
 async function archiveChannel(chan: Channel): Promise<void> {
    if (!object.hasTKey(chan, "id", string.is))
@@ -132,8 +133,6 @@ async function archiveChannel(chan: Channel): Promise<void> {
    const cc = progress_json.messageChunks;
    var shadowIndex = 0;
    while (true) {
-      await sleep(3);
-
       if (shadowIndex > ChunkCollection.gapMax(cc))
          break;
 
@@ -150,6 +149,9 @@ async function archiveChannel(chan: Channel): Promise<void> {
          continue;
       }
 
+      io.puts("\n\n\n");
+      io.puts("Taking a break...");
+      await sleep(3);
       io.puts(`GET  ${paramOldest} -> ${paramLatest}`);
       const res = await client.conversations.history({
          channel: chan.id,
@@ -190,6 +192,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
                   continue;
                }
 
+               await sleep_ms(99);
                const thisFileDir = `${chanDir}/files/${file.id}`;
                io.mkdirDeep(thisFileDir);
                io.puts(`Downloading ${file.id}`);
@@ -201,17 +204,33 @@ async function archiveChannel(chan: Channel): Promise<void> {
                   continue;
                }
 
-               const startingAt: u64 | undefined = progress_json.filesInProgress[file.id]?.bytesDownloaded;
+               const startingAt: u64 | undefined = progress_json.filesInProgress[file.id];
 
-               const im = await client.downloadFile(file, startingAt);
+               let im: IncomingMessage;
+               try {
+                  im = await client.downloadFile(file, startingAt);
+               }
+               catch (e: any) {
+                  io.puts("Alright guess not");
+                  io.puts(e.toString());
+                  continue;
+               }
                const id = new IncomingDownload(im);
                let offset = Number(id.rangeStart);
                id.flow(b => {
+                  const beforeOffset = offset;
                   io.write(f.fd, b, b.length, offset);
-                  progress_json.filesInProgress[file.id] = 
-                  io.puts(`Wrote ${thisFile}[${offset}...${offset += b.length}]`);
+                  offset += b.length;
+                  progress_json.filesInProgress[file.id] = u64.from(offset);
+                  io.writeToJSON(progress_json_fd, progress_json);
+                  io.puts(`Wrote ${thisFile}[${beforeOffset}...${offset}]`);
                });
-               await id.finished;
+
+               if (await id.finished) {
+                  progress_json.fileCompletions[file.id] = u64.from(Date.now()) as never;
+                  delete progress_json.filesInProgress[file.id];
+               }
+               io.writeToJSON(progress_json_fd, progress_json);
                io.close(f.fd);
             }
          }
@@ -235,18 +254,19 @@ async function archiveChannel(chan: Channel): Promise<void> {
       // with the latest message.
 
       // Let's just compute the true oldest and latest here:
+      if (res.messages.length === 0) {
+         shadowIndex++;
+         continue;
+      }
+
       {
          const first = res.messages[0].ts;
          const last  = res.messages[len - 1].ts;
 
          if (first === last) {
-            const sErr = ""
-               + "When downloading a chunk, the first and last timestamps were"
-               + "the same.\nI hadn't planned for this since I thought it was"
-               + "impossible but if\nyou're seeing this message, apparently it"
-               + "actually happened.\n"
-               + "Sorry. You should probably open a bug report.";
-            throw new TypeError(sErr);
+            // ok so this probably means we finished archiving.
+            shadowIndex++;
+            continue;
          }
 
          if (first < last) {
@@ -289,6 +309,9 @@ async function archiveChannel(chan: Channel): Promise<void> {
 
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
+   const users = await client.users.list();
+   
+
    const conversations = await client.users.conversations(allConversations);
    if (conversations.channels === void 0)
       throw new Error(conversations.error);
