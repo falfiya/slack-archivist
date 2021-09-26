@@ -2,7 +2,7 @@ import * as io from "./io";
 import {sConfig} from "./sConfig";
 
 const cwd = process.cwd();
-var config_json: sConfig;
+let config_json: sConfig;
 {
    const filename = `${cwd}/config.json`;
    const opened = io.open2(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
@@ -35,8 +35,8 @@ const archiveDir = config_json.archiveDir;
 io.mkdirDeep(archiveDir);
 
 import {sChannels} from "./sChannels";
-var channels_json: sChannels;
-var channels_json_fd: io.fd;
+let channels_json: sChannels;
+let channels_json_fd: io.fd;
 {
    const filename = `${archiveDir}/channels.json`;
    const opened = io.open2(filename, io.C.O_RDWR);
@@ -66,10 +66,13 @@ import {sMessages} from "./sMessages";
 import {array, object, string, u64} from "./types";
 import {IncomingDownload, sleep, sleep_ms} from "./util";
 import {IncomingMessage} from "http";
+import {O_WRONLY} from "constants";
 
 async function archiveChannel(chan: Channel): Promise<void> {
    if (!object.hasTKey(chan, "id", string.is))
       throw new TypeError("chan.id must be a string!");
+
+   io.puts(`archiving ${chan.id}!!!!!!!!!!!!!`);
 
    channels_json[chan.id] = chan;
    io.writeToJSON(channels_json_fd, channels_json);
@@ -77,8 +80,8 @@ async function archiveChannel(chan: Channel): Promise<void> {
    const chanDir = `${archiveDir}/${chan.id}`;
    io.mkdirDeep(chanDir);
 
-   var progress_json: sProgress;
-   var progress_json_fd: io.fd;
+   let progress_json: sProgress;
+   let progress_json_fd: io.fd;
    {
       const filename = `${chanDir}/progress.json`;
       const opened = io.open2(filename, io.C.O_RDWR);
@@ -103,8 +106,8 @@ async function archiveChannel(chan: Channel): Promise<void> {
       }
    }
 
-   var messages_json: sMessages;
-   var messages_json_fd: io.fd;
+   let messages_json: sMessages;
+   let messages_json_fd: io.fd;
    {
       const filename = `${chanDir}/messages.json`;
       const opened = io.open2(filename, io.C.O_RDWR);
@@ -131,7 +134,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
 
    // start archiving from the last known message
    const cc = progress_json.messageChunks;
-   var shadowIndex = 0;
+   let shadowIndex = 0;
    while (true) {
       if (shadowIndex > ChunkCollection.gapMax(cc))
          break;
@@ -179,7 +182,11 @@ async function archiveChannel(chan: Channel): Promise<void> {
          }
 
          if (object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
-            io.puts("Message has files. Initiating download.");
+            io.puts(`${chanDir}/${m.ts} has files, initiating download.`);
+            if (!object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
+               throw new Error("WTF FILES???");
+            }
+
             for (const file of m.files) {
                if (!DecentFile.is(file)) {
                   io.errs(String(file));
@@ -259,6 +266,8 @@ async function archiveChannel(chan: Channel): Promise<void> {
          continue;
       }
 
+      let trueOldest;
+      let trueLatest;
       {
          const first = res.messages[0].ts;
          const last  = res.messages[len - 1].ts;
@@ -270,17 +279,18 @@ async function archiveChannel(chan: Channel): Promise<void> {
          }
 
          if (first < last) {
-            var trueOldest = first;
-            var trueLatest = last;
+            trueOldest = first;
+            trueLatest = last;
          } else {
-            var trueOldest = last;
-            var trueLatest = first;
+            trueOldest = last;
+            trueLatest = first;
          }
       }
 
       const finishedAt = u64.from(Date.now());
+      let chunk;
       if (res.has_more) {
-         var chunk = {
+         chunk = {
             oldest: trueOldest,
             latest: trueLatest,
             finishedAt,
@@ -290,7 +300,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
          // don't we? There is one case, and that's with filling gaps of no
          // messages. I am unable to come up with a reason as to why this might
          // happen but in the event that it could, here you go.
-         var chunk = {
+         chunk = {
             oldest: paramOldest ?? trueOldest,
             latest: paramLatest ?? trueLatest,
             finishedAt,
@@ -309,8 +319,14 @@ async function archiveChannel(chan: Channel): Promise<void> {
 
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
-   const users = await client.users.list();
-   
+   {
+      const users = await client.users.list();
+      const res = io.open2(`${archiveDir}/users.json`, O_WRONLY);
+      if (res.tag !== "error" && users.members !== undefined) {
+         io.writeToJSON(res.fd, users.members);
+         io.close(res.fd);
+      }
+   }
 
    const conversations = await client.users.conversations(allConversations);
    if (conversations.channels === void 0)
