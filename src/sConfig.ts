@@ -1,4 +1,4 @@
-import {object, string, u64} from "./types";
+import {object, string, u64, transmute} from "./types";
 
 export class sConfig {
    userToken: string;
@@ -12,12 +12,11 @@ export class sConfig {
    }
 
    static into(u: unknown): sConfig {
-      object.assert(u);
-
-      object.assertKey(u, "userToken", string.assert);
-      object.assertKey(u, "archiveDir", string.assert);
-      object.intoKey(u, "messageChunkSize", u64.into);
-
-      return u;
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("userToken", string.into)
+         .fieldInto("archiveDir", string.into)
+         .fieldInto("messageChunkSize", u64.into)
+         .it;
    }
 }

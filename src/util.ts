@@ -12,9 +12,7 @@ export function sleep_ms(s: number) {
 export const fromJSON = (json: string): unknown => J.parse(json);
 export const toJSON = (what: any): string => J.stringify(what, null, 3);
 
-import {IncomingMessage} from "http";
-
-export function getRangeStart(im: IncomingMessage): u64 {
+export function getRangeStart(im: import("http").IncomingMessage): u64 {
    const pre = "bytes ";
 
    const cr = im.headers["content-range"];

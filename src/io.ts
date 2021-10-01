@@ -13,10 +13,10 @@ type Error  = {tag: "error" ; error: Error};
  * remember to mkdirDeep before calling this
  * @param mode should not include O_CREAT
  */
-export function open2
-( path : string
-, mode1: number
-, mode2: number = mode1 | fs.constants.O_CREAT
+export function open2(
+   path : string,
+   mode1: number,
+   mode2: number = mode1 | fs.constants.O_CREAT
 ): Open | Create | Error
 {
    try {

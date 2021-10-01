@@ -1,5 +1,4 @@
-type ParseFn<T> = (u: unknown) => T;
-type FromFn<T>  = (u: unknown) => T;
+type Into<T> = (u: unknown) => T;
 
 declare const u64_s: unique symbol;
 export type u64_o = {[u64_s]: void};
@@ -31,67 +30,67 @@ export namespace u64 {
 }
 
 export namespace string {
-   export function assert(u: unknown): asserts u is string {
+   export function into(u: unknown): string {
       if (typeof u !== "string") {
          throw new TypeError(`${typeof u} is not "string"!`);
       }
+      return u;
    }
-}
-
-export function assert<T>(u: unknown, fn: ParseFn<T>): asserts u is T {
-   fn(u);
 }
 
 export namespace object {
-   export function assert(u: unknown): asserts u is object {
+   export function into(u: unknown): object {
       if (typeof u !== "object" || u === null) {
          throw new TypeError(`${typeof u } is not "object"!`);
       }
+      return u;
    }
-
-   export function assertKey
-      <o extends {}, k extends string, T>(o: o, k: k, fn: (u: unknown) => asserts u is T):
-         asserts o is o & Record<k, T>
-         {
-            if (!Object.hasOwnProperty.call(o, k)) {
-               throw new TypeError(`object does not have key "${k}"!`);
-            }
-            fn((o as any)[k]);
-         }
-
-   export function intoKey
-      <o extends {}, k extends string, T>(o: o, k: k, fn: (u: unknown) => T):
-         asserts o is o & Record<k, T>
-         {
-            if (!Object.hasOwnProperty.call(o, k)) {
-               throw new TypeError(`object does not have key "${k}"!`);
-            }
-            (o as any)[k] = fn((o as any)[k]);
-         }
 }
 
-// export namespace array {
-//    export const is = (u: unknown): u is unknown[] =>
-//       Array.isArray(u);
+export namespace array {
+   export function intoUnknown(u: unknown): unknown[] {
+      if (!Array.isArray(u)) {
+         throw new TypeError(`"${typeof u}" cannot be converted into unknown[]!`);
+      }
+      return u;
+   }
 
-//    export function isT<T>(u: unknown, fnT: IsT<T>): u is T[] {
-//       if (!Array.isArray(u))
-//          return false;
+   export function intoT<T>(fn: Into<T>) {
+      return function into2(u: unknown): T[] {
+         if (!Array.isArray(u)) {
+            throw new TypeError(`"${typeof u}" is not an array!`);
+         }
+         const len = u.length
+         for (let i = 0; i < len; ++i) {
+            u[i] = fn(u[i]);
+         }
+         return u as any;
+      }
+   }
+}
 
-//       for (const v of u)
-//          if (!fnT(v))
-//             return false;
+class Transmute<T> {
+   it: T;
 
-//       return true;
-//    }
+   constructor (it: T) {
+      this.it = it;
+   }
 
-//    export const isTC =
-//       <T>(fnT: IsT<T>) =>
-//          (u: unknown): u is T[] =>
-//             isT(u, fnT);
-// }
+   into<U>(fn: Into<U>): Transmute<U> {
+      return new Transmute(fn(this.it));
+   }
 
-// export type Struct<T> = {
-//    default: T;
-//    parse(u: unknown): T;
-// }
+   fieldInto<k extends string, U>(k: k, fn: T extends object ? Into<U> : void):
+   Transmute<T & Record<k, U>>
+   {
+      if (!Object.hasOwnProperty.call(this.it, k)) {
+         throw new TypeError(`object does not have key "${k}"!`);
+      }
+      (this.it as any)[k] = (fn as Into<U>)((this.it as any)[k]);
+      return this as any;
+   }
+}
+
+export function transmute<T = unknown>(it: T): Transmute<T> {
+   return new Transmute(it);
+}

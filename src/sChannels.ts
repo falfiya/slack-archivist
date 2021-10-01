@@ -1,11 +1,12 @@
 import {Channel} from "./slack";
-import {object} from "./types";
+import {object, transmute} from "./types";
 
 export class sChannels {
    [id: string]: Channel;
    static default: sChannels = {};
-   static parse(u: unknown): sChannels {
-      object.assert(u);
-      return u as any;
+   static into(u: unknown): sChannels {
+      return transmute(u)
+         .into(object.into)
+         .it as any;
    }
 }

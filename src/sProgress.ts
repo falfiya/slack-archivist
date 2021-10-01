@@ -1,17 +1,21 @@
 import {Timestamp} from "./slack";
-import {object, array, u64} from "./types";
+import {object, array, u64, transmute} from "./types";
 
 export type FileCompletions = {[id: string]: number};
 export namespace FileCompletions {
-   export function is(u: unknown): u is FileCompletions {
-      return object.is(u);
+   export function into(u: unknown): FileCompletions {
+      return transmute(u)
+         .into(object.into)
+         .it as any;
    };
 }
 
 export type FilesInProgress = {[id: string]: u64};
 export namespace FilesInProgress {
-   export function is(u: unknown): u is FilesInProgress {
-      return object.is(u);
+   export function into(u: unknown): FilesInProgress {
+      return transmute(u)
+         .into(object.into)
+         .it as any;
    }
 }
 
@@ -20,18 +24,24 @@ export type MessageChunk = {
    latest: Timestamp;
    finishedAt: u64;
 }
-
 export namespace MessageChunk {
-   export const is = (u: unknown): u is MessageChunk => 1
-      && object.is(u)
-      && object.hasTKey(u, "oldest", Timestamp.is)
-      && object.hasTKey(u, "latest", Timestamp.is)
-      && object.parseTKey(u, "finishedAt", u64.parse)
+   export function into(u: unknown): MessageChunk {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("oldest", Timestamp.into)
+         .fieldInto("latest", Timestamp.into)
+         .fieldInto("finishedAt", u64.into)
+         .it;
+   }
 }
 
 export type ChunkCollection = MessageChunk[];
 export namespace ChunkCollection {
-   export const is = array.isTC(MessageChunk.is);
+   export function into(u: unknown): ChunkCollection {
+      return transmute(u)
+         .into(array.intoT(MessageChunk.into))
+         .it;
+   }
 
    export type Gap = {
       oldest?: Timestamp;
@@ -120,16 +130,12 @@ export class sProgress {
       messageChunks: [],
    };
 
-   static parse(u: unknown): sProgress {
-      if (!object.is(u))
-         throw new TypeError(`progress_json must be an object!`);
-      if (!object.hasTKey(u, "fileCompletions", FileCompletions.is))
-         throw new TypeError("progress_json.fileCompletions must be a FileCompletions!");
-      if (!object.hasTKey(u, "filesInProgress", FilesInProgress.is))
-         throw new TypeError("progress_json.fileInProgress must be a FileInProgress!");
-      if (!object.hasTKey(u, "messageChunks", ChunkCollection.is))
-         throw new TypeError("progress_json.messageChunks must exist!");
-
-      return u;
+   static into(u: unknown): sProgress {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("fileCompletions", FileCompletions.into)
+         .fieldInto("filesInProgress", FilesInProgress.into)
+         .fieldInto("messageChunks", ChunkCollection.into)
+         .it;
    }
 }

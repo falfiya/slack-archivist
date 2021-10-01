@@ -1,12 +1,12 @@
 import {DecentFile} from "./slack";
+import {array, transmute} from "./types";
 
 export class sFiles extends Array<DecentFile> {
    static default: sFiles = [];
 
-   static parse(u: unknown): sFiles {
-      if (!Array.isArray(u))
-         throw new TypeError("files.json should parse to an Array!");
-
-      return u;
+   static into(u: unknown): sFiles {
+      return transmute(u)
+         .into(array.intoT(DecentFile.into))
+         .it;
    }
 }

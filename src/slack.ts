@@ -1,61 +1,68 @@
-import {object, string, u64} from "./types";
+import axios from "axios";
+import {WebClient} from "@slack/web-api";
+import {IncomingMessage} from "http";
+import {object, string, transmute, u64} from "./types";
 
-export type {Channel} from "@slack/web-api/dist/response/UsersConversationsResponse";
-
-// timestamp
 declare const timestamp_s: unique symbol;
 export type timestamp_o = {[timestamp_s]: void};
-/** slack timestamp */
 export type Timestamp = timestamp_o & string;
 export namespace Timestamp {
    const reSlackTimeStamp = /^\d{10}\.\d{6}$/;
 
-   export const is = (u: unknown): u is Timestamp =>
-      typeof u === "string" && reSlackTimeStamp.test(u);
-
-   export function from(s: string): Timestamp {
-      if (!is(s))
-         throw new TypeError(`"${s}"" is not a slack timestamp!`);
-
-      return s as Timestamp;
+   export function into(u: unknown): Timestamp {
+      if (typeof u !== "string") {
+         throw new TypeError(`Cannot convert type "${typeof u}" to Timestamp!`);
+      }
+      if (reSlackTimeStamp.test(u)) {
+         throw new TypeError(`"${u}" does not match the regex ${reSlackTimeStamp}!`);
+      }
+      return u as any;
    }
 
    export const toDate = (ts: Timestamp): Date =>
       new Date(+ts.replace('.', "").slice(0, -3));
 
-   export const MIN = from("0000000000.000000");
+   export const MIN = into("0000000000.000000");
 }
 
-import type {Message} from "@slack/web-api/dist/response/ConversationsHistoryResponse";
 export type DecentMessage =
-   & Message
+   & import("@slack/web-api/dist/response/ConversationsHistoryResponse").Message
    & {ts: Timestamp};
 export namespace DecentMessage {
-   export const is = (u: unknown): u is DecentMessage =>
-      object.is(u) && object.hasTKey(u, "ts", Timestamp.is);
-}
-
-import type {File} from "@slack/web-api/dist/response/FilesListResponse";
-export type DecentFile =
-   & File
-   & {
-      id: string;
-      name: string;
-      url_private: string;
-      // [thumb: `thumb_${number}`]: string;
-   };
-export namespace DecentFile {
-   export function assert(u: unknown): asserts u is DecentFile {
-      object.assert(u);
-      object.assertKey(u, "id", string.assert);
-      object.assertKey(u, "name", string.assert);
-      object.assertKey(u, "url_private", string.assert);
+   export function into(u: unknown): DecentMessage {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("ts", Timestamp.into)
+         .it;
    }
 }
 
-import axios from "axios";
-import {WebClient} from "@slack/web-api";
-import {IncomingMessage} from "http";
+export type DecentFile =
+   & import("@slack/web-api/dist/response/ConversationsHistoryResponse").File
+   & {id: string; name: string; url_private: string};
+export namespace DecentFile {
+   export function into(u: unknown): DecentFile {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("id", string.into)
+         .fieldInto("name", string.into)
+         .fieldInto("url_private", string.into)
+         .it;
+   }
+}
+
+export type DecentChannel =
+   & import("@slack/web-api/dist/response/UsersConversationsResponse").Channel
+   & {id: string};
+export namespace DecentChannel {
+   export function into(u: unknown): DecentChannel {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("id", string.into)
+         .it;
+   }
+}
+
 export class CustomWebClient extends WebClient {
    messageExists(channel: string, ts: Timestamp): Promise<boolean> {
       return (

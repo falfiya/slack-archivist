@@ -1,15 +1,16 @@
-import {array} from "./types";
+import {array, transmute} from "./types";
 import {Timestamp, DecentMessage} from "./slack";
 
 export class sMessages extends Array<DecentMessage> {
    static default: sMessages = [];
 
-   static parse(u: unknown): sMessages {
-      if (!array.isT(u, DecentMessage.is))
-         throw new TypeError("messages_json must be an array of TimestampObject!");
+   static into(u: unknown): sMessages {
+      const ary = transmute(u)
+         .into(array.intoT(DecentMessage.into))
+         .it;
 
       var lastTs = Timestamp.MIN;
-      for (const msg of u) {
+      for (const msg of ary) {
          if (msg.ts === lastTs)
             throw new TypeError("Duplicate messages!");
          if (msg.ts < lastTs)
@@ -17,11 +18,11 @@ export class sMessages extends Array<DecentMessage> {
          lastTs = msg.ts;
       }
 
-      return u;
+      return ary;
    }
 
    static insert(into: sMessages, msg: DecentMessage): boolean {
-      var upper = into.length - 1;
+      let upper = into.length - 1;
 
       if (upper === -1) {
          into.push(msg);
@@ -44,7 +45,7 @@ export class sMessages extends Array<DecentMessage> {
          return true;
       }
 
-      var lower = 1;
+      let lower = 1;
       // otherwise binary insert it
       console.log(`trying to binary insert ${msg.ts}`);
       while (lower !== upper) {
