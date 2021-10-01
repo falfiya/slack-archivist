@@ -1,40 +1,37 @@
 import * as fs from "fs";
-export {constants as C} from "fs";
+import * as fs_ext from "fs-ext";
+import {fromJSON, toJSON} from "./util";
 
 declare const fd_s: unique symbol;
 export type fd_o = {[fd_s]: void};
 export type fd = fd_o & number;
 
-type Open   = {tag: "open"  ; fd: fd};
-type Create = {tag: "create"; fd: fd};
-type Error  = {tag: "error" ; error: Error};
+export function flock(fd: fd) {
+   fs_ext.flockSync(fd, fs_ext.constants.LOCK_EX);
+}
 
-/**
- * remember to mkdirDeep before calling this
- * @param mode should not include O_CREAT
- */
-export function open2(
-   path : string,
-   mode1: number,
-   mode2: number = mode1 | fs.constants.O_CREAT
-): Open | Create | Error
+export function funlock(fd: fd) {
+   fs_ext.flockSync(fd, fs_ext.constants.LOCK_UN);
+}
+
+/** remember to mkdirDeep before calling this */
+export function open(path: string): [created: boolean, fd: fd]
 {
+   const mode = fs.constants.O_RDWR;
    try {
-      const fd = fs.openSync(path, mode1) as fd;
-      return {tag: "open", fd};
+      const fd = fs.openSync(path, mode) as fd;
+      flock(fd);
+      return [false, fd];
    }
-   catch (_) {}
-
-   try {
-      const fd = fs.openSync(path, mode2) as fd;
-      return {tag: "create", fd};
-   }
-   catch (error: any) {
-      return {tag: "error", error};
+   catch (_) {
+      const fd = fs.openSync(path, mode | fs.constants.O_CREAT) as fd;
+      flock(fd);
+      return [true, fd];
    }
 }
 
 export function close(fd: fd): void {
+   funlock(fd);
    fs.closeSync(fd);
 }
 
@@ -42,18 +39,10 @@ export function mkdirDeep(path: string): void {
    fs.mkdirSync(path, {recursive: true});
 }
 
-import {Struct, u64} from "./types";
-import {fromJSON, toJSON} from "./util";
-
-export function readStruct<T>
-(f: fs.PathOrFileDescriptor, recordType: Struct<T>)
-{
-   try {
-      return recordType.parse(fromJSON(fs.readFileSync(f, "utf8")));
-   } catch (e: any) {
-      errs(e.toString());
-      return null;
-   }
+export function readJSON<T>(fd: fd) {
+   const buf = Buffer.alloc(fs.fstatSync(fd).size);
+   fs.readSync(fd, buf);
+   return fromJSON(buf.toString("utf8"));
 }
 
 export function write(fd: fd, buf: Buffer, length: number, offset: number): void {

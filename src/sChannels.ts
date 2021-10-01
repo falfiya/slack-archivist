@@ -1,8 +1,8 @@
-import {Channel} from "./slack";
+import {DecentChannel} from "./slack";
 import {object, transmute} from "./types";
 
 export class sChannels {
-   [id: string]: Channel;
+   [id: string]: DecentChannel;
    static default: sChannels = {};
    static into(u: unknown): sChannels {
       return transmute(u)

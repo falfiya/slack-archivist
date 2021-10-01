@@ -1,81 +1,43 @@
 import * as io from "./io";
 import {sConfig} from "./sConfig";
+import {sChannels} from "./sChannels";
+import {ChunkCollection, sProgress} from "./sProgress";
+import {sMessages} from "./sMessages";
+import {
+   CustomWebClient,
+   DecentChannel,
+   Timestamp,
+   DecentMessage,
+   DecentFile
+} from "./slack";
 
 const cwd = process.cwd();
 let config_json: sConfig;
 {
    const filename = `${cwd}/config.json`;
-   const opened = io.open2(filename, io.C.O_RDONLY, io.C.O_CREAT | io.C.O_WRONLY);
-   switch (opened.tag) {
-   case "create":
+   const [created, fd] = io.open(filename);
+   if (created) {
       io.errs("You did not make a config file so I made one for you.");
-      io.writeToJSON(opened.fd, sConfig.default);
+      io.writeToJSON(fd, sConfig.default);
       io.errs(`Your config file is at "${filename}".`);
       process.exit(1);
-   case "error":
-      io.errs(opened.error.toString());
-      io.errs(`There was an error obtaining a handle to "${filename}".`);
-      process.exit(1);
-   case "open":
-      const parsed = io.readStruct(opened.fd, sConfig);
-      if (parsed === null) {
-         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-         io.errs("Either correct it or remove it manually.");
-         process.exit(1);
-      }
-      config_json = parsed;
    }
-   io.close(opened.fd);
+
+   config_json = sConfig.into(io.readJSON(fd));
+   io.close(fd);
 }
 
-import {CustomWebClient, Channel, Timestamp, DecentMessage, DecentFile} from "./slack";
 const client = new CustomWebClient(config_json.userToken);
 
 const archiveDir = config_json.archiveDir;
 io.mkdirDeep(archiveDir);
 
-import {sChannels} from "./sChannels";
-let channels_json: sChannels;
-let channels_json_fd: io.fd;
-{
-   const filename = `${archiveDir}/channels.json`;
-   const opened = io.open2(filename, io.C.O_RDWR);
-   switch (opened.tag) {
-   case "create":
-      channels_json_fd = opened.fd;
-      channels_json = sChannels.default;
-      io.writeToJSON(channels_json_fd, channels_json);
-      break;
-   case "open":
-      channels_json_fd = opened.fd;
-      const parsed = io.readStruct(channels_json_fd, sChannels);
-      if (parsed === null) {
-         io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-         process.exit(1);
-      }
-      channels_json = parsed;
-      break;
-   case "error":
-      io.errs(`Couldn't open "${filename}".`);
-      process.exit(1);
-   }
-}
-
-import {ChunkCollection, sProgress} from "./sProgress";
-import {sMessages} from "./sMessages";
-import {array, object, string, u64} from "./types";
-import {IncomingDownload, sleep, sleep_ms} from "./util";
+import {array, object, string, transmute, u64} from "./types";
+import {sleep, sleep_ms} from "./util";
 import {IncomingMessage} from "http";
-import {O_WRONLY} from "constants";
 
-async function archiveChannel(chan: Channel): Promise<void> {
-   if (!object.hasTKey(chan, "id", string.is))
-      throw new TypeError("chan.id must be a string!");
-
+async function archiveChannel(chan: DecentChannel): Promise<void> {
    io.puts(`${chan.id} start archive`);
-
-   channels_json[chan.id] = chan;
-   io.writeToJSON(channels_json_fd, channels_json);
 
    const chanDir = `${archiveDir}/${chan.id}`;
    io.mkdirDeep(chanDir);
@@ -83,61 +45,36 @@ async function archiveChannel(chan: Channel): Promise<void> {
    let progress_json: sProgress;
    let progress_json_fd: io.fd;
    {
-      const filename = `${chanDir}/progress.json`;
-      const opened = io.open2(filename, io.C.O_RDWR);
-      switch (opened.tag) {
-      case "create":
-         progress_json_fd = opened.fd;
+      const [created, fd] = io.open(`${chanDir}/progress.json`);
+      if (created) {
          progress_json = sProgress.default;
-         io.writeToJSON(progress_json_fd, progress_json);
-      break;
-      case "open":
-         progress_json_fd = opened.fd;
-         const parsed = io.readStruct(progress_json_fd, sProgress);
-         if (parsed === null) {
-            io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-            process.exit(1);
-         }
-         progress_json = parsed;
-      break;
-      case "error":
-         io.errs(`There was an error obtaining a handle to "${filename}".`);
-         process.exit(1);
+         io.writeToJSON(fd, progress_json);
+      } else {
+         progress_json = sProgress.into(io.readJSON(fd));
       }
+      progress_json_fd = fd;
    }
 
    let messages_json: sMessages;
    let messages_json_fd: io.fd;
    {
-      const filename = `${chanDir}/messages.json`;
-      const opened = io.open2(filename, io.C.O_RDWR);
-      switch (opened.tag) {
-      case "create":
-         messages_json_fd = opened.fd ;
+      const [created, fd] = io.open(`${chanDir}/messages.json`);
+      if (created) {
          messages_json = sMessages.default;
-         io.writeToJSON(messages_json_fd, messages_json);
-      break;
-      case "open":
-         messages_json_fd = opened.fd ;
-         const parsed = io.readStruct(messages_json_fd, sMessages);
-         if (parsed === null) {
-            io.errs(`There was an error reading the structured JSON inside "${filename}".`);
-            process.exit(1);
-         }
-         messages_json = parsed;
-      break;
-      case "error":
-         io.errs(`There was an error obtaining a handle to "${filename}".`);
-         process.exit(1);
+         io.writeToJSON(fd, messages_json);
+      } else {
+         messages_json = sMessages.into(io.readJSON(fd));
       }
+      messages_json_fd = fd;
    }
 
    // start archiving from the last known message
    const cc = progress_json.messageChunks;
    let shadowIndex = 0;
    while (true) {
-      if (shadowIndex > ChunkCollection.gapMax(cc))
+      if (shadowIndex > ChunkCollection.gapMax(cc)) {
          break;
+      }
 
       const gap = ChunkCollection.getGap(cc, shadowIndex);
       const paramOldest = gap.oldest;
@@ -319,19 +256,40 @@ const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
    {
       const users = await client.users.list();
-      const res = io.open2(`${archiveDir}/users.json`, O_WRONLY);
-      if (res.tag !== "error" && users.members !== undefined) {
-         io.writeToJSON(res.fd, users.members);
-         io.close(res.fd);
-      }
+      const [_, fd] = io.open(`${archiveDir}/users.json`);
+      // fix this later
+      io.writeToJSON(fd, users.members);
+      io.close(fd);
    }
 
    const conversations = await client.users.conversations(allConversations);
-   if (conversations.channels === void 0)
-      throw new Error(conversations.error);
+   if (conversations.channels === void 0) {
+      throw new TypeError(conversations.error);
+   }
 
-   for (const chan of conversations.channels)
+   let channels_json: sChannels;
+   let channels_json_fd: io.fd;
+   {
+      const [created, fd] = io.open(`${archiveDir}/channels.json`);
+      if (created) {
+         channels_json = sChannels.default;
+         io.writeToJSON(fd, channels_json);
+      } else {
+         channels_json = sChannels.into(io.readJSON(fd));
+      }
+      channels_json_fd = fd;
+   }
+
+   for (const c of conversations.channels) {
+      const chan = transmute(c)
+         .into(DecentChannel.into)
+         .it;
+
+      channels_json[chan.id] = chan;
+      io.writeToJSON(channels_json_fd, channels_json);
+
       await archiveChannel(chan);
+   }
 
    io.close(channels_json_fd);
 }();

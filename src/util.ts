@@ -9,7 +9,7 @@ export function sleep_ms(s: number) {
    return new Promise<void>(res => setTimeout(res, s));
 }
 
-export const fromJSON = (json: string): unknown => J.parse(json);
+export const fromJSON = J.parse;
 export const toJSON = (what: any): string => J.stringify(what, null, 3);
 
 export function getRangeStart(im: import("http").IncomingMessage): u64 {
