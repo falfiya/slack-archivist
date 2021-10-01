@@ -3,12 +3,10 @@ import {puts} from "./io";
 import J from "json-bigint";
 
 export function sleep(s: number) {
-   puts(`sleeping for ${s} second${s === 1 ? "" : "s"}`);
    return new Promise<void>(res => setTimeout(res, s * 1000));
 }
 
 export function sleep_ms(s: number) {
-   puts(`sleeping for ${s} ms`);
    return new Promise<void>(res => setTimeout(res, s));
 }
 

@@ -72,7 +72,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
    if (!object.hasTKey(chan, "id", string.is))
       throw new TypeError("chan.id must be a string!");
 
-   io.puts(`archiving ${chan.id}!!!!!!!!!!!!!`);
+   io.puts(`${chan.id} start archive`);
 
    channels_json[chan.id] = chan;
    io.writeToJSON(channels_json_fd, channels_json);
@@ -147,15 +147,13 @@ async function archiveChannel(chan: Channel): Promise<void> {
       if (paramOldest !== void 0) // guard for not start of time
       if (paramLatest !== void 0) // guard for not end of time (not required)
       {
-         io.puts(`OKAY ${paramOldest} -> ${paramLatest}`)
+         io.puts(`${chan.id}/${paramOldest}/${paramLatest} have chunk`);
          shadowIndex++;
          continue;
       }
 
-      io.puts("\n\n\n");
-      io.puts("Taking a break...");
       await sleep(3);
-      io.puts(`GET  ${paramOldest} -> ${paramLatest}`);
+      io.puts(`${chan.id}/${paramOldest}/${paramLatest} get chunk`);
       const res = await client.conversations.history({
          channel: chan.id,
          oldest: paramOldest,
@@ -177,32 +175,31 @@ async function archiveChannel(chan: Channel): Promise<void> {
          }
 
          if (!sMessages.insert(messages_json, m)) {
-            io.errs(`Already have ${m.ts}, skipping...`);
+            io.errs(`${chan.id}/${m.ts} message already recorded`);
             continue;
          }
 
-         if (object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
-            io.puts(`${chanDir}/${m.ts} has files, initiating download.`);
+         if (object.hasKey(m, "files")) {
+            io.puts(`${chan.id}/${m.ts} has files`);
             if (!object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
                throw new Error("WTF FILES???");
             }
 
             for (const file of m.files) {
                if (!DecentFile.is(file)) {
-                  io.errs(String(file));
-                  io.errs("This file sucks!");
+                  io.errs(`${chan.id}/${m.ts} not a decent file`);
                   continue;
                }
 
                if (object.hasKey(progress_json.fileCompletions, file.id)) {
-                  io.puts(`Have ${file.id}, skipping!`);
+                  io.puts(`${chan.id}/${m.ts} file already downloaded`);
                   continue;
                }
 
                await sleep_ms(99);
                const thisFileDir = `${chanDir}/files/${file.id}`;
                io.mkdirDeep(thisFileDir);
-               io.puts(`Downloading ${file.id}`);
+               io.puts(`${chan.id}/${m.ts} downloading file`);
 
                const thisFile = `${thisFileDir}/${file.name}`;
                const f = io.open2(thisFile, io.C.O_WRONLY);
@@ -230,10 +227,11 @@ async function archiveChannel(chan: Channel): Promise<void> {
                   offset += b.length;
                   progress_json.filesInProgress[file.id] = u64.from(offset);
                   io.writeToJSON(progress_json_fd, progress_json);
-                  io.puts(`Wrote ${thisFile}[${beforeOffset}...${offset}]`);
+                  io.put(`\r${chan.id}/${m.ts}/files/${file.id} wrote [${beforeOffset}...${offset}]`);
                });
 
                if (await id.finished) {
+                  io.puts(`\n${chan.id}/${m.ts}/files/${file.id} done`);
                   progress_json.fileCompletions[file.id] = u64.from(Date.now()) as never;
                   delete progress_json.filesInProgress[file.id];
                }

@@ -64,6 +64,10 @@ export function writeToJSON(fd: fd, what: any): void {
    fs.writeSync(fd, toJSON(what), 0);
 }
 
+export function put(str: string) {
+   process.stdout.write(str);
+}
+
 export function puts(str: string) {
    process.stdout.write(str + "\n");
 }
