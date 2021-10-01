@@ -225,14 +225,14 @@ async function archiveChannel(chan: Channel): Promise<void> {
                   const beforeOffset = offset;
                   io.write(f.fd, b, b.length, offset);
                   offset += b.length;
-                  progress_json.filesInProgress[file.id] = u64.from(offset);
+                  progress_json.filesInProgress[file.id] = u64.into(offset);
                   io.writeToJSON(progress_json_fd, progress_json);
                   io.put(`\r${chan.id}/${m.ts}/files/${file.id} wrote [${beforeOffset}...${offset}]`);
                });
 
                if (await id.finished) {
                   io.puts(`\n${chan.id}/${m.ts}/files/${file.id} done`);
-                  progress_json.fileCompletions[file.id] = u64.from(Date.now()) as never;
+                  progress_json.fileCompletions[file.id] = u64.into(Date.now()) as never;
                   delete progress_json.filesInProgress[file.id];
                }
                io.writeToJSON(progress_json_fd, progress_json);
@@ -285,7 +285,7 @@ async function archiveChannel(chan: Channel): Promise<void> {
          }
       }
 
-      const finishedAt = u64.from(Date.now());
+      const finishedAt = u64.into(Date.now());
       let chunk;
       if (res.has_more) {
          chunk = {

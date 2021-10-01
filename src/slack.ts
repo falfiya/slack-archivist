@@ -45,11 +45,12 @@ export type DecentFile =
       // [thumb: `thumb_${number}`]: string;
    };
 export namespace DecentFile {
-   export const is = (u: unknown): u is DecentFile => 1
-      && object.is(u)
-      && object.hasTKey(u, "id", string.is)
-      && object.hasTKey(u, "name", string.is)
-      && object.hasTKey(u, "url_private", string.is);
+   export function assert(u: unknown): asserts u is DecentFile {
+      object.assert(u);
+      object.assertKey(u, "id", string.assert);
+      object.assertKey(u, "name", string.assert);
+      object.assertKey(u, "url_private", string.assert);
+   }
 }
 
 import axios from "axios";
