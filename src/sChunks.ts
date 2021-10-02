@@ -1,3 +1,16 @@
+/**
+ * this is probably going to be the thing that makes the least sense in here.
+ * so why are we recording which chunks of messages we've downloaded? well,
+ * if someone were to go along and nuke or edit a whole bunch of messages in a
+ * server, it would be nice to know when the archive of those specific messages
+ * was performed.
+ *
+ * at least, that's what you, the user care about. for this program, it serves
+ * as records keeping. this archiver probably wants to download whatever's in
+ * between the bits it's already downloaded. kinda like a torrent client.
+ * unarchived messages can appear in the past or future so you can imagine a gap
+ * always being at the very beginning and very end that can never be filled.
+ */
 import {Timestamp} from "./slack";
 import {object, array, u64, transmute} from "./types";
 
@@ -23,7 +36,9 @@ export type Gap = {
 };
 
 export class sChunks extends Array<MessageChunk> {
-   static default: sChunks = [];
+   static default(): sChunks {
+      return [];
+   }
 
    static into(u: unknown): sChunks {
       const ary = transmute(u)

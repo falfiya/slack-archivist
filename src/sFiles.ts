@@ -25,10 +25,12 @@ export class sFiles {
    completions: Completions;
    inProgress: InProgress;
 
-   static default: sFiles = {
-      completions: {},
-      inProgress: {},
-   };
+   static default(): sFiles {
+      return {
+         completions: {},
+         inProgress: {},
+      };
+   }
 
    static into(u: unknown): sFiles {
       return transmute(u)

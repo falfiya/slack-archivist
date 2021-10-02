@@ -2,35 +2,46 @@ import {IncomingMessage} from "http";
 import J from "json-bigint";
 import {u64} from "./types";
 
-export function sleep(s: number) {
-   return new Promise<void>(res => setTimeout(res, s * 1000));
-}
-
-export function sleep_ms(s: number) {
-   return new Promise<void>(res => setTimeout(res, s));
+export function sleep(s: number | bigint) {
+   return new Promise<void>(res => setTimeout(res, Number(s) * 1000));
 }
 
 export const fromJSON = J.parse;
 export const toJSON = (what: any): string => J.stringify(what, null, 3);
 
 export namespace Mushroom {
-   export function getRangeStart(im: IncomingMessage): u64 {
-      const pre = "bytes ";
+   export type Range = {
+      start: u64;
+      end: u64;
+      size: u64;
+   };
+
+   export function parseRange(im: IncomingMessage): Range {
+      const bytes = "bytes ";
+
+      let start = u64.ZERO;
+      let end   = u64.ZERO;
+      let size  = u64.ZERO;
 
       const cr = im.headers["content-range"];
-      if (cr === undefined || !cr.startsWith(pre)) {
-         return 0n as u64;
+      if (cr === undefined || !cr.startsWith(bytes)) {
+         return {start, end, size};
       }
 
-      const range = cr.slice(pre.length);
+      const range = cr.slice(bytes.length);
+      const slashIdx = range.lastIndexOf('/');
+      if (slashIdx === -1) {
+         return {start, end, size};
+      }
+      size = u64.into(range.slice(slashIdx + 1));
+
       const dashIdx = range.indexOf('-');
-      if (dashIdx === -1) {
-         return 0n as u64;
+      if (dashIdx !== -1) {
+         start = u64.into(range.slice(0, dashIdx));
+         end   = u64.into(range.slice(dashIdx + 1, slashIdx));
       }
 
-      else {
-         return u64.into(range.slice(0, dashIdx));
-      }
+      return {start, end, size};
    }
 
    export function waitFor(im: IncomingMessage): Promise<void> {

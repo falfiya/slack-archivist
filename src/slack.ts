@@ -13,14 +13,15 @@ export namespace Timestamp {
       if (typeof u !== "string") {
          throw new TypeError(`Cannot convert type "${typeof u}" to Timestamp!`);
       }
-      if (reSlackTimeStamp.test(u)) {
+      if (!reSlackTimeStamp.test(u)) {
          throw new TypeError(`"${u}" does not match the regex ${reSlackTimeStamp}!`);
       }
       return u as any;
    }
 
-   export const toDate = (ts: Timestamp): Date =>
-      new Date(+ts.replace('.', "").slice(0, -3));
+   export function toDate(ts: Timestamp): Date {
+      return new Date(+ts.replace('.', "").slice(0, -3));
+   }
 
    export const MIN = into("0000000000.000000");
 }
@@ -73,16 +74,16 @@ export class CustomWebClient extends WebClient {
    }
 
    async downloadFile(file: DecentFile, startingAt: u64 = 0n as u64): Promise<IncomingMessage> {
-      const res = await axios({
-         url: file.url_private,
-         method: "GET",
-         responseType: "stream",
-         headers: {
-            authorization: `Bearer ${this.token}`,
-            range: `bytes=${startingAt}-`,
-         },
-      });
-
-      return res.data;
+      return ((
+         await axios({
+            url: file.url_private,
+            method: "GET",
+            responseType: "stream",
+            headers: {
+               authorization: `Bearer ${this.token}`,
+               range: `bytes=${startingAt}-`,
+            },
+         })
+      ).data);
    }
 }

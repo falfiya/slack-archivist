@@ -1,4 +1,4 @@
-PATH += ;.\node_modules\.bin
+PATH := .\node_modules\.bin;$(PATH)
 
 run: bin/main.js
 	node $<

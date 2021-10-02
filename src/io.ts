@@ -6,15 +6,22 @@ declare const fd_s: unique symbol;
 export type fd_o = {[fd_s]: void};
 export type fd = fd_o & number;
 
-export function flock(fd: fd) {
+function flock(fd: fd) {
    fs_ext.flockSync(fd, fs_ext.constants.LOCK_EX);
 }
 
-export function funlock(fd: fd) {
+function funlock(fd: fd) {
    fs_ext.flockSync(fd, fs_ext.constants.LOCK_UN);
 }
 
-/** remember to mkdirDeep before calling this */
+/**
+ * remember to mkdirDeep before calling this.
+ *
+ * open is responsible for giving you a file descriptor. most of the time, it's
+ * kinda nice to know if you created the file as you opened it or if the file
+ * was already there. that way if the file was never made, we shouldn't try
+ * parsing it as data.
+ */
 export function open(path: string): [created: boolean, fd: fd]
 {
    const mode = fs.constants.O_RDWR;
@@ -31,7 +38,7 @@ export function open(path: string): [created: boolean, fd: fd]
 }
 
 export function close(fd: fd): void {
-   funlock(fd);
+   // funlock(fd);
    fs.closeSync(fd);
 }
 

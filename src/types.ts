@@ -19,7 +19,7 @@ export namespace u64 {
       }
 
       const clamped = BigInt.asUintN(64, parsedAs);
-      if (parsedAs === clamped) {
+      if (parsedAs !== clamped) {
          throw new TypeError(`${parsedAs} overflowed to ${clamped}!`);
       }
 

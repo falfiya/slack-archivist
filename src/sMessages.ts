@@ -2,7 +2,9 @@ import {array, transmute} from "./types";
 import {Timestamp, DecentMessage} from "./slack";
 
 export class sMessages extends Array<DecentMessage> {
-   static default: sMessages = [];
+   static default(): sMessages {
+      return [];
+   }
 
    static into(u: unknown): sMessages {
       const ary = transmute(u)
@@ -49,7 +51,6 @@ export class sMessages extends Array<DecentMessage> {
 
       let lower = 1;
       // otherwise binary insert it
-      console.log(`trying to binary insert ${msg.ts}`);
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
@@ -69,7 +70,6 @@ export class sMessages extends Array<DecentMessage> {
          return false;
       }
 
-      console.log(`binserted ${msg.ts}`);
       into.splice(lower, 0, msg);
       return true;
    }
