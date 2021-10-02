@@ -9,12 +9,14 @@ export class sMessages extends Array<DecentMessage> {
          .into(array.intoT(DecentMessage.into))
          .it;
 
-      var lastTs = Timestamp.MIN;
+      let lastTs = Timestamp.MIN;
       for (const msg of ary) {
-         if (msg.ts === lastTs)
-            throw new TypeError("Duplicate messages!");
-         if (msg.ts < lastTs)
-            throw new TypeError("Messages out of order!");
+         if (msg.ts === lastTs) {
+            throw new TypeError("Duplicate message!");
+         }
+         if (msg.ts < lastTs) {
+            throw new TypeError("Message out of order!");
+         }
          lastTs = msg.ts;
       }
 
@@ -63,9 +65,9 @@ export class sMessages extends Array<DecentMessage> {
       }
 
       // invariant: check if the message is the same as the two next to it
-      if (msg.ts === into[lower - 1].ts)
-      if (msg.ts === into[lower + 0].ts)
+      if (msg.ts === into[lower - 1].ts || msg.ts === into[lower + 0].ts) {
          return false;
+      }
 
       console.log(`binserted ${msg.ts}`);
       into.splice(lower, 0, msg);

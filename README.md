@@ -37,13 +37,15 @@
 ```
 $archive_dir
 > channels.json
-> $channel_id
-   > progress.json
-   > messages.json
-   > files.json
-   > files
-      > $file_id
-         > $filename
+> channels
+   > $channel_id
+      > chunks.json
+      > messages.json
+> files.json
+> files
+   > $file_id
+      > $filename
+> users.json
 ```
 
 ## known issues

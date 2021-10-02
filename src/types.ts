@@ -27,6 +27,7 @@ export namespace u64 {
    }
 
    export const to_i32 = (u: u64) => Number(BigInt.asIntN(32, u))|0;
+   export const ZERO = 0n as u64;
 }
 
 export namespace string {
@@ -39,6 +40,12 @@ export namespace string {
 }
 
 export namespace object {
+   export function hasKey
+      <o extends {}, k extends string>(o: o, k: k):
+         o is o & Record<k, unknown>
+         {
+            return Object.hasOwnProperty.call(o, k);
+         }
    export function into(u: unknown): object {
       if (typeof u !== "object" || u === null) {
          throw new TypeError(`${typeof u } is not "object"!`);

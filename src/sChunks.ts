@@ -1,24 +1,6 @@
 import {Timestamp} from "./slack";
 import {object, array, u64, transmute} from "./types";
 
-export type FileCompletions = {[id: string]: number};
-export namespace FileCompletions {
-   export function into(u: unknown): FileCompletions {
-      return transmute(u)
-         .into(object.into)
-         .it as any;
-   };
-}
-
-export type FilesInProgress = {[id: string]: u64};
-export namespace FilesInProgress {
-   export function into(u: unknown): FilesInProgress {
-      return transmute(u)
-         .into(object.into)
-         .it as any;
-   }
-}
-
 export type MessageChunk = {
    oldest: Timestamp;
    latest: Timestamp;
@@ -35,30 +17,43 @@ export namespace MessageChunk {
    }
 }
 
-export type ChunkCollection = MessageChunk[];
-export namespace ChunkCollection {
-   export function into(u: unknown): ChunkCollection {
-      return transmute(u)
+export type Gap = {
+   oldest?: Timestamp;
+   latest?: Timestamp;
+};
+
+export class sChunks extends Array<MessageChunk> {
+   static default: sChunks = [];
+
+   static into(u: unknown): sChunks {
+      const ary = transmute(u)
          .into(array.intoT(MessageChunk.into))
          .it;
+
+      let lastTs = Timestamp.MIN;
+      for (const chunk of ary) {
+         if (lastTs > chunk.oldest) {
+            throw new TypeError("Chunks out of order!");
+         }
+         lastTs = chunk.latest;
+      }
+
+      return ary;
    }
 
-   export type Gap = {
-      oldest?: Timestamp;
-      latest?: Timestamp;
-   };
+   static gapMax(c: sChunks): number {
+      return c.length;
+   }
 
-   export const gapMax = (cc: ChunkCollection) => cc.length;
-
-   export function getGap(cc: ChunkCollection, idx: number): Gap {
+   static getGap(c: sChunks, idx: number): Gap {
       return {
-         oldest: cc[idx - 1]?.latest,
-         latest: cc[idx]?.oldest,
+         oldest: c[idx - 1]?.latest,
+         latest: c[idx]?.oldest,
       };
    }
 
-   export function insert(into: ChunkCollection, m: MessageChunk): boolean {
-      var upper = into.length - 1;
+   static insert(into: sChunks, m: MessageChunk): boolean {
+      let upper = into.length - 1;
 
       // empty
       if (upper === -1) {
@@ -79,7 +74,7 @@ export namespace ChunkCollection {
       }
 
       // somewhere in the middle
-      var lower = 1;
+      let lower = 1;
       while (lower !== upper) {
          const halfLength = upper - lower >> 1;
          const pivot = lower + halfLength;
@@ -116,26 +111,5 @@ export namespace ChunkCollection {
       }
 
       return false;
-   }
-}
-
-export class sProgress {
-   fileCompletions: FileCompletions;
-   filesInProgress: FilesInProgress;
-   messageChunks: MessageChunk[];
-
-   static default: sProgress = {
-      fileCompletions: {},
-      filesInProgress: {},
-      messageChunks: [],
-   };
-
-   static into(u: unknown): sProgress {
-      return transmute(u)
-         .into(object.into)
-         .fieldInto("fileCompletions", FileCompletions.into)
-         .fieldInto("filesInProgress", FilesInProgress.into)
-         .fieldInto("messageChunks", ChunkCollection.into)
-         .it;
    }
 }

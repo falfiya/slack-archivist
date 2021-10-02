@@ -1,18 +1,18 @@
 import * as io from "./io";
 import {sConfig} from "./sConfig";
 import {sChannels} from "./sChannels";
-import {ChunkCollection, sProgress} from "./sProgress";
+import {sChunks} from "./sChunks";
 import {sMessages} from "./sMessages";
 import {
    CustomWebClient,
    DecentChannel,
-   Timestamp,
    DecentMessage,
    DecentFile
 } from "./slack";
-import {array, object, string, transmute, u64} from "./types";
-import {sleep, sleep_ms} from "./util";
+import {array, object, transmute, u64} from "./types";
+import {Mushroom, sleep, sleep_ms} from "./util";
 import {IncomingMessage} from "http";
+import {sFiles} from "./sFiles";
 
 const cwd = process.cwd();
 let config_json: sConfig;
@@ -30,11 +30,24 @@ let config_json: sConfig;
    io.close(fd);
 }
 
-const client = new CustomWebClient(config_json.userToken);
-
 const archiveDir = config_json.archiveDir;
-io.mkdirDeep(archiveDir);
+const filesDir = `${archiveDir}/files`;
 
+io.mkdirDeep(archiveDir);
+let files_json: sFiles;
+let files_fd: io.fd;
+{
+   const [created, fd] = io.open(`${archiveDir}/files.json`);
+   if (created) {
+      files_json = sFiles.default;
+      io.writeToJSON(fd, files_json);
+   } else {
+      files_json = sFiles.into(io.readJSON(fd));
+   }
+   files_fd = fd;
+}
+
+const client = new CustomWebClient(config_json.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
    {
@@ -51,7 +64,7 @@ void async function main(): Promise<void> {
    }
 
    let channels_json: sChannels;
-   let channels_json_fd: io.fd;
+   let channels_fd: io.fd;
    {
       const [created, fd] = io.open(`${archiveDir}/channels.json`);
       if (created) {
@@ -60,44 +73,47 @@ void async function main(): Promise<void> {
       } else {
          channels_json = sChannels.into(io.readJSON(fd));
       }
-      channels_json_fd = fd;
+      channels_fd = fd;
    }
 
+   const channelsDir = `${archiveDir}/channels`;
+   io.mkdirDeep(channelsDir)
    for (const c of conversations.channels) {
       const chan = transmute(c)
          .into(DecentChannel.into)
          .it;
 
       channels_json[chan.id] = chan;
-      io.writeToJSON(channels_json_fd, channels_json);
+      io.writeToJSON(channels_fd, channels_json);
 
-      await archiveChannel(chan);
+      await archiveChannel(chan, channelsDir);
    }
 
-   io.close(channels_json_fd);
+   io.close(channels_fd);
+   io.close(files_fd);
 }();
 
-async function archiveChannel(chan: DecentChannel): Promise<void> {
+async function archiveChannel(chan: DecentChannel, parentDir: string): Promise<void> {
    io.puts(`${chan.id} start archive`);
 
-   const chanDir = `${archiveDir}/${chan.id}`;
+   const chanDir = `${parentDir}/${chan.id}`;
    io.mkdirDeep(chanDir);
 
-   let progress_json: sProgress;
-   let progress_json_fd: io.fd;
+   let chunks_json: sChunks;
+   let chunks_fd: io.fd;
    {
-      const [created, fd] = io.open(`${chanDir}/progress.json`);
+      const [created, fd] = io.open(`${chanDir}/chunks.json`);
       if (created) {
-         progress_json = sProgress.default;
-         io.writeToJSON(fd, progress_json);
+         chunks_json = sChunks.default;
+         io.writeToJSON(fd, chunks_json);
       } else {
-         progress_json = sProgress.into(io.readJSON(fd));
+         chunks_json = sChunks.into(io.readJSON(fd));
       }
-      progress_json_fd = fd;
+      chunks_fd = fd;
    }
 
    let messages_json: sMessages;
-   let messages_json_fd: io.fd;
+   let messages_fd: io.fd;
    {
       const [created, fd] = io.open(`${chanDir}/messages.json`);
       if (created) {
@@ -106,18 +122,17 @@ async function archiveChannel(chan: DecentChannel): Promise<void> {
       } else {
          messages_json = sMessages.into(io.readJSON(fd));
       }
-      messages_json_fd = fd;
+      messages_fd = fd;
    }
 
    // start archiving from the last known message
-   const cc = progress_json.messageChunks;
    let shadowIndex = 0;
    while (true) {
-      if (shadowIndex > ChunkCollection.gapMax(cc)) {
+      if (shadowIndex > sChunks.gapMax(chunks_json)) {
          break;
       }
 
-      const gap = ChunkCollection.getGap(cc, shadowIndex);
+      const gap = sChunks.getGap(chunks_json, shadowIndex);
       const paramOldest = gap.oldest;
       const paramLatest = gap.latest;
 
@@ -150,7 +165,7 @@ async function archiveChannel(chan: DecentChannel): Promise<void> {
          const msg = transmute(m)
             .into(DecentMessage.into)
             .it;
-         await archiveMessage(msg);
+         await archiveMessage(msg, messages_json);
       }
 
       // When a chunk of messages comes in, there's a bit that we have to do to
@@ -180,8 +195,8 @@ async function archiveChannel(chan: DecentChannel): Promise<void> {
                latest: paramLatest,
                finishedAt,
             };
-            ChunkCollection.insert(cc, chunk);
-            io.writeToJSON(progress_json_fd, progress_json);
+            sChunks.insert(chunks_json, chunk);
+            io.writeToJSON(chunks_fd, chunks_json);
          }
          continue;
       }
@@ -230,85 +245,71 @@ async function archiveChannel(chan: DecentChannel): Promise<void> {
          };
       }
 
-      ChunkCollection.insert(cc, chunk);
+      sChunks.insert(chunks_json, chunk);
 
-      io.writeToJSON(messages_json_fd, messages_json);
-      io.writeToJSON(progress_json_fd, progress_json);
+      io.writeToJSON(messages_fd, messages_json);
+      io.writeToJSON(chunks_fd, chunks_json);
    }
 
-   io.close(messages_json_fd);
-   io.close(progress_json_fd);
+   io.close(messages_fd);
+   io.close(chunks_fd);
 }
 
-async function archiveMessage(msg: DecentMessage, refMessages_json: sMessages) {
-   const couldInsert = sMessages.insert(refMessages_json, msg);
+async function archiveMessage(msg: DecentMessage, messages_json: sMessages) {
+   const couldInsert = sMessages.insert(messages_json, msg);
    if (!couldInsert) {
       io.errs(`${msg.ts} has already been recorded!`);
    }
 
-   
-   if (object.hasKey(m, "files")) {
-      io.puts(`${chan.id}/${m.ts} has files`);
-      if (!object.hasTKey(m, "files", array.isTC(DecentFile.is))) {
-         throw new Error("WTF FILES???");
-      }
-
-      for (const file of m.files) {
-         if (!DecentFile.is(file)) {
-            io.errs(`${chan.id}/${m.ts} not a decent file`);
-            continue;
-         }
-
-         if (object.hasKey(progress_json.fileCompletions, file.id)) {
-            io.puts(`${chan.id}/${m.ts} file already downloaded`);
-            continue;
-         }
-
-         await sleep_ms(99);
-         const thisFileDir = `${chanDir}/files/${file.id}`;
-         io.mkdirDeep(thisFileDir);
-         io.puts(`${chan.id}/${m.ts} downloading file`);
-
-         const thisFile = `${thisFileDir}/${file.name}`;
-         const f = io.open2(thisFile, io.C.O_WRONLY);
-         if (f.tag === "error") {
-            io.errs(`cannot open ${thisFile}`);
-            continue;
-         }
-
-         const startingAt: u64 | undefined = progress_json.filesInProgress[file.id];
-
-         let im: IncomingMessage;
-         try {
-            im = await client.downloadFile(file, startingAt);
-         }
-         catch (e: any) {
-            io.puts("Alright guess not");
-            io.puts(e.toString());
-            continue;
-         }
-         const id = new IncomingDownload(im);
-         let offset = Number(id.rangeStart);
-         id.flow(b => {
-            const beforeOffset = offset;
-            io.write(f.fd, b, b.length, offset);
-            offset += b.length;
-            progress_json.filesInProgress[file.id] = u64.into(offset);
-            io.writeToJSON(progress_json_fd, progress_json);
-            io.put(`\r${chan.id}/${m.ts}/files/${file.id} wrote [${beforeOffset}...${offset}]`);
-         });
-
-         if (await id.finished) {
-            io.puts(`\n${chan.id}/${m.ts}/files/${file.id} done`);
-            progress_json.fileCompletions[file.id] = u64.into(Date.now()) as never;
-            delete progress_json.filesInProgress[file.id];
-         }
-         io.writeToJSON(progress_json_fd, progress_json);
-         io.close(f.fd);
+   if (object.hasKey(msg, "files")) {
+      const files = transmute(msg.files)
+         .into(array.intoT(DecentFile.into))
+         .it;
+      for (const file of files) {
+         await archiveFile(file);
       }
    }
 }
 
 async function archiveFile(file: DecentFile) {
-   
+   if (object.hasKey(files_json.completions, file.id)) {
+      io.errs(`already have ${file.id}`);
+      return;
+   }
+
+   const fileDir = `${filesDir}/${file.id}`;
+   io.mkdirDeep(fileDir);
+   const [created, fd] = io.open(`${fileDir}/${file.name}`);
+
+   let startingAt: u64 | undefined;
+   if (created) {
+      startingAt = undefined;
+   } else {
+      startingAt = files_json.inProgress[file.id];
+   }
+
+   const im: IncomingMessage = await client.downloadFile(file, startingAt);
+   let offset = Number(Mushroom.getRangeStart(im));
+
+   im.on("data", (buf: Buffer) => {
+      const oldOffset = offset;
+      const len = buf.byteLength;
+
+      io.write(fd, buf, len, offset);
+
+      offset += len;
+      files_json.inProgress[file.id] = u64.into(offset);
+
+      io.writeToJSON(files_fd, files_json);
+      io.put(`\r${file.id} wrote [${oldOffset}...${offset}]`);
+   });
+
+   await Mushroom.waitFor(im);
+   io.puts(`\r${file.id} done`);
+
+   delete files_json.inProgress[file.id];
+   files_json.completions[file.id] = u64.into(Date.now()) as never;
+   io.close(fd);
+
+   io.writeToJSON(files_fd, files_json);
 }
