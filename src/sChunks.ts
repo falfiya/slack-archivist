@@ -42,7 +42,7 @@ export class sChunks extends Array<MessageChunk> {
 
    static into(u: unknown): sChunks {
       const ary = transmute(u)
-         .into(array.intoT(MessageChunk.into))
+         .into(array.into(MessageChunk.into))
          .it;
 
       let lastTs = Timestamp.MIN;

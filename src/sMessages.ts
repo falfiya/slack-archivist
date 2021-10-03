@@ -1,14 +1,14 @@
 import {array, transmute} from "./types";
-import {Timestamp, DecentMessage} from "./slack";
+import {Timestamp, Message} from "./slack";
 
-export class sMessages extends Array<DecentMessage> {
+export class sMessages extends Array<Message> {
    static default(): sMessages {
       return [];
    }
 
    static into(u: unknown): sMessages {
       const ary = transmute(u)
-         .into(array.intoT(DecentMessage.into))
+         .into(array.into(Message.into))
          .it;
 
       let lastTs = Timestamp.MIN;
@@ -25,7 +25,7 @@ export class sMessages extends Array<DecentMessage> {
       return ary;
    }
 
-   static insert(into: sMessages, msg: DecentMessage): boolean {
+   static insert(into: sMessages, msg: Message): boolean {
       let upper = into.length - 1;
 
       if (upper === -1) {

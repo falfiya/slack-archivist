@@ -1,14 +1,17 @@
-import {DecentChannel} from "./slack";
+import {Channel} from "./slack";
 import {object, transmute} from "./types";
 
 export class sChannels {
-   [id: string]: DecentChannel;
+   [id: string]: Channel;
+
    static default(): sChannels {
       return {};
    }
+
    static into(u: unknown): sChannels {
       return transmute(u)
          .into(object.into)
-         .it as any;
+         .into(object.intoIndexSignature(Channel.into))
+         .it;
    }
 }

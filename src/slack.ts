@@ -2,6 +2,10 @@ import axios from "axios";
 import {WebClient} from "@slack/web-api";
 import {IncomingMessage} from "http";
 import {object, string, transmute, u64} from "./types";
+import type {Message as SlackMessage, File as SlackFile} from
+   "@slack/web-api/dist/response/ConversationsHistoryResponse";
+import type {Channel as SlackChannel} from
+   "@slack/web-api/dist/response/ConversationsListResponse";
 
 declare const timestamp_s: unique symbol;
 export type timestamp_o = {[timestamp_s]: void};
@@ -26,11 +30,9 @@ export namespace Timestamp {
    export const MIN = into("0000000000.000000");
 }
 
-export type DecentMessage =
-   & import("@slack/web-api/dist/response/ConversationsHistoryResponse").Message
-   & {ts: Timestamp};
-export namespace DecentMessage {
-   export function into(u: unknown): DecentMessage {
+export type Message = SlackMessage & {ts: Timestamp};
+export namespace Message {
+   export function into(u: unknown): Message {
       return transmute(u)
          .into(object.into)
          .fieldInto("ts", Timestamp.into)
@@ -38,11 +40,9 @@ export namespace DecentMessage {
    }
 }
 
-export type DecentFile =
-   & import("@slack/web-api/dist/response/ConversationsHistoryResponse").File
-   & {id: string; name: string; url_private: string};
-export namespace DecentFile {
-   export function into(u: unknown): DecentFile {
+export type File = SlackFile & {id: string; name: string; url_private: string};
+export namespace File {
+   export function into(u: unknown): File {
       return transmute(u)
          .into(object.into)
          .fieldInto("id", string.into)
@@ -52,11 +52,9 @@ export namespace DecentFile {
    }
 }
 
-export type DecentChannel =
-   & import("@slack/web-api/dist/response/UsersConversationsResponse").Channel
-   & {id: string};
-export namespace DecentChannel {
-   export function into(u: unknown): DecentChannel {
+export type Channel = SlackChannel & {id: string};
+export namespace Channel {
+   export function into(u: unknown): Channel {
       return transmute(u)
          .into(object.into)
          .fieldInto("id", string.into)
@@ -64,7 +62,7 @@ export namespace DecentChannel {
    }
 }
 
-export class CustomWebClient extends WebClient {
+export class Client extends WebClient {
    messageExists(channel: string, ts: Timestamp): Promise<boolean> {
       return (
          this.conversations.history(
@@ -73,7 +71,7 @@ export class CustomWebClient extends WebClient {
                .catch(_ => false))
    }
 
-   async downloadFile(file: DecentFile, startingAt: u64 = 0n as u64): Promise<IncomingMessage> {
+   async downloadFile(file: File, startingAt: u64 = u64.ZERO): Promise<IncomingMessage> {
       return ((
          await axios({
             url: file.url_private,

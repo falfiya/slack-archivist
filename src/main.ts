@@ -4,7 +4,7 @@ import {sFiles} from "./sFiles";
 import {sChannels} from "./sChannels";
 import {sChunks} from "./sChunks";
 import {sMessages} from "./sMessages";
-import {CustomWebClient, DecentChannel, DecentMessage, DecentFile} from "./slack";
+import {Client, Channel, Message, File} from "./slack";
 import {array, object, transmute, u64} from "./types";
 import {Mushroom, sleep} from "./util";
 import {IncomingMessage} from "http";
@@ -42,7 +42,7 @@ let files_fd: io.fd;
    files_fd = fd;
 }
 
-const client = new CustomWebClient(config_obj.userToken);
+const client = new Client(config_obj.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
    {
@@ -75,7 +75,7 @@ void async function main(): Promise<void> {
    io.mkdirDeep(channelsDir)
    for (const c of conversations.channels) {
       const chan = transmute(c)
-         .into(DecentChannel.into)
+         .into(Channel.into)
          .it;
 
       channels_obj[chan.id] = chan;
@@ -89,7 +89,7 @@ void async function main(): Promise<void> {
    io.close(files_fd);
 }();
 
-async function archiveChannel(chan: DecentChannel, parentDir: string): Promise<void> {
+async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
    io.puts(` CHAN: archiving ${chan.id}`);
 
    const chanDir = `${parentDir}/${chan.id}`;
@@ -160,7 +160,7 @@ async function archiveChannel(chan: DecentChannel, parentDir: string): Promise<v
 
       for (const m of messages) {
          const msg = transmute(m)
-            .into(DecentMessage.into)
+            .into(Message.into)
             .it;
          await archiveMessage(msg, messages_obj);
       }
@@ -202,10 +202,10 @@ async function archiveChannel(chan: DecentChannel, parentDir: string): Promise<v
       let trueLatest;
       {
          const first = transmute(messages[0])
-            .into(DecentMessage.into)
+            .into(Message.into)
             .it.ts;
          const last  = transmute(messages[msgCount - 1])
-            .into(DecentMessage.into)
+            .into(Message.into)
             .it.ts;
 
          if (first === last) {
@@ -252,7 +252,7 @@ async function archiveChannel(chan: DecentChannel, parentDir: string): Promise<v
    io.close(chunks_fd);
 }
 
-async function archiveMessage(msg: DecentMessage, messages_obj: sMessages) {
+async function archiveMessage(msg: Message, messages_obj: sMessages) {
    const couldInsert = sMessages.insert(messages_obj, msg);
    if (!couldInsert) {
       // io.errs(`  MSG: skipping ${msg.ts}`);
@@ -260,7 +260,7 @@ async function archiveMessage(msg: DecentMessage, messages_obj: sMessages) {
 
    if (object.hasKey(msg, "files")) {
       const files = transmute(msg.files)
-         .into(array.intoT(DecentFile.into))
+         .into(array.into(File.into))
          .it;
       for (const file of files) {
          await archiveFile(file);
@@ -268,7 +268,7 @@ async function archiveMessage(msg: DecentMessage, messages_obj: sMessages) {
    }
 }
 
-async function archiveFile(file: DecentFile) {
+async function archiveFile(file: File) {
    if (object.hasKey(files_obj.completions, file.id)) {
       // io.puts(` FILE: skipping ${file.id}`);
       return;

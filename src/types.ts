@@ -1,4 +1,5 @@
-type Into<T> = (u: unknown) => T;
+type fn<a, b> = (a: a) => b;
+type ufn<T> = fn<unknown, T>;
 
 declare const u64_s: unique symbol;
 export type u64_o = {[u64_s]: void};
@@ -46,11 +47,21 @@ export namespace object {
          {
             return Object.hasOwnProperty.call(o, k);
          }
+
    export function into(u: unknown): object {
       if (typeof u !== "object" || u === null) {
          throw new TypeError(`${typeof u } is not "object"!`);
       }
       return u;
+   }
+
+   export function intoIndexSignature<T>(fn: ufn<T>) {
+      return function intoCurried(o: object): {[key: string]: T} {
+         for (const k of Object.keys(o)) {
+            (o as any)[k] = fn((o as any)[k]);
+         }
+         return o as any;
+      }
    }
 }
 
@@ -62,8 +73,8 @@ export namespace array {
       return u;
    }
 
-   export function intoT<T>(fn: Into<T>) {
-      return function into2(u: unknown): T[] {
+   export function into<T>(fn: ufn<T>) {
+      return function intoCurried(u: unknown): T[] {
          if (!Array.isArray(u)) {
             throw new TypeError(`"${typeof u}" is not an array!`);
          }
@@ -76,28 +87,42 @@ export namespace array {
    }
 }
 
-class Transmute<T> {
+interface TransmuteBase<T> {
+   it: T;
+   into<U, R = T & U>(fn: fn<T, U>):
+      U extends object ? TransmuteObject<R> : TransmuteBase<R>;
+}
+
+interface TransmuteObject<T> extends TransmuteBase<T> {
+   fieldInto<k extends string, U>(k: k, fn: ufn<U>):
+      TransmuteObject<T & Record<k, U>>;
+}
+
+class TransmuteInternal<T> implements TransmuteObject<T> {
    it: T;
 
    constructor (it: T) {
       this.it = it;
    }
 
-   into<U>(fn: Into<U>): Transmute<U> {
-      return new Transmute(fn(this.it));
-   }
+   into<U, R = T & U>(fn: fn<T, U>):
+      U extends object ? TransmuteObject<R> : TransmuteBase<R>
+      {
+         return new TransmuteInternal(fn(this.it)) as any;
+      }
 
-   fieldInto<k extends string, U>(k: k, fn: T extends object ? Into<U> : void):
-   Transmute<T & Record<k, U>>
+   fieldInto<k extends string, U>(k: k, fn: ufn<U>):
+      TransmuteObject<T & Record<k, U>>
    {
       if (!Object.hasOwnProperty.call(this.it, k)) {
          throw new TypeError(`object does not have key "${k}"!`);
       }
-      (this.it as any)[k] = (fn as Into<U>)((this.it as any)[k]);
+      (this.it as any)[k] = (fn as ufn<U>)((this.it as any)[k]);
       return this as any;
    }
 }
 
-export function transmute<T = unknown>(it: T): Transmute<T> {
-   return new Transmute(it);
+
+export function transmute<T = unknown>(it: T): TransmuteBase<T> {
+   return new TransmuteInternal(it);
 }

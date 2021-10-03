@@ -1,23 +1,35 @@
-import {DecentFile} from "./slack";
+import {File} from "./slack";
 import {object, transmute, u64} from "./types";
 
-export type Complete = {completeAt: u64, file: DecentFile};
-export type Completions = {[id: string]: Complete};
-export namespace Completions {
+type Complete = {completeAt: u64, file: File};
+namespace Complete {
+   export function into(u: unknown): Complete {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("completeAt", u64.into)
+         .fieldInto("file", File.into)
+         .it;
+   }
+}
+
+type Completions = {[id: string]: Complete};
+namespace Completions {
    export function into(u: unknown): Completions {
       return transmute(u)
          .into(object.into)
-         .it as any;
+         .into(object.intoIndexSignature(Complete.into))
+         .it;
    };
 }
 
 /** shows the number of bytes downloaded */
-export type InProgress = {[id: string]: u64};
-export namespace InProgress {
+type InProgress = {[id: string]: u64};
+namespace InProgress {
    export function into(u: unknown): InProgress {
       return transmute(u)
          .into(object.into)
-         .it as any;
+         .into(object.intoIndexSignature(u64.into))
+         .it;
    }
 }
 

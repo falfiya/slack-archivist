@@ -1,13 +1,13 @@
-import {IncomingMessage} from "http";
-import J from "json-bigint";
 import {u64} from "./types";
+import {IncomingMessage} from "http";
+import {parse, stringify} from "json-bigint";
 
 export function sleep(s: number | bigint) {
    return new Promise<void>(res => setTimeout(res, Number(s) * 1000));
 }
 
-export const fromJSON = J.parse;
-export const toJSON = (what: any): string => J.stringify(what, null, 3);
+export const fromJSON = parse;
+export const toJSON = (what: any): string => stringify(what, null, 3);
 
 export namespace Mushroom {
    export type Range = {
