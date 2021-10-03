@@ -1,9 +1,9 @@
 import * as io from "./io";
-import {sConfig} from "./sConfig";
-import {sFiles} from "./sFiles";
-import {sChannels} from "./sChannels";
-import {sChunks} from "./sChunks";
-import {sMessages} from "./sMessages";
+import {sConfig} from "./s_Config";
+import {sFiles} from "./s_Files";
+import {sChannels} from "./s_Channels";
+import {sChunks} from "./s_Chunks";
+import {sMessages} from "./s_Messages";
 import {Client, Channel, Message, File} from "./slack";
 import {array, object, transmute, u64} from "./types";
 import {Mushroom, sleep} from "./util";
@@ -154,6 +154,7 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       const finishedAt = u64.into(Date.now());
 
       const {messages} = transmute(res)
+         .into(object.into)
          .fieldInto("messages", array.intoUnknown)
          .it;
       const msgCount = messages.length;
@@ -260,6 +261,7 @@ async function archiveMessage(msg: Message, messages_obj: sMessages) {
 
    if (object.hasKey(msg, "files")) {
       const files = transmute(msg.files)
+         .into(array.intoUnknown)
          .into(array.into(File.into))
          .it;
       for (const file of files) {

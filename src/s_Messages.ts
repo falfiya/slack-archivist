@@ -8,6 +8,7 @@ export class sMessages extends Array<Message> {
 
    static into(u: unknown): sMessages {
       const ary = transmute(u)
+         .into(array.intoUnknown)
          .into(array.into(Message.into))
          .it;
 

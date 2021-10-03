@@ -42,6 +42,7 @@ export class sChunks extends Array<MessageChunk> {
 
    static into(u: unknown): sChunks {
       const ary = transmute(u)
+         .into(array.intoUnknown)
          .into(array.into(MessageChunk.into))
          .it;
 

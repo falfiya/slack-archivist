@@ -74,7 +74,7 @@ export namespace array {
    }
 
    export function into<T>(fn: ufn<T>) {
-      return function intoCurried(u: unknown): T[] {
+      return function intoCurried(u: unknown[]): T[] {
          if (!Array.isArray(u)) {
             throw new TypeError(`"${typeof u}" is not an array!`);
          }
@@ -111,7 +111,7 @@ class TransmuteInternal<T> implements TransmuteObject<T> {
          return new TransmuteInternal(fn(this.it)) as any;
       }
 
-   fieldInto<k extends string, U>(k: k, fn: ufn<U>):
+   fieldInto<k extends string, U>(k: k, fn: fn<T, U>):
       TransmuteObject<T & Record<k, U>>
    {
       if (!Object.hasOwnProperty.call(this.it, k)) {

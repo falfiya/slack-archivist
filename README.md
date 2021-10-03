@@ -1,4 +1,4 @@
-# slack-archivist
+# @coalpha/slack-archivist
 
 <img src="misc/icon.png" width="100px"/>
 
