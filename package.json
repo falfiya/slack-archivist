@@ -1,4 +1,8 @@
 {
+   "scripts": {
+      "start": "npm run build && node bin/main",
+      "build": "tsc"
+   },
    "dependencies": {
       "@slack/web-api": "^6.4.0",
       "axios": "^0.21.4",

@@ -1,4 +1,8 @@
-PATH := .\node_modules\.bin;$(PATH)
+ifeq ($(OS),Windows_NT)
+	PATH := .\node_modules\.bin;$(PATH)
+else
+	PATH := ./node_modules/.bin:$(PATH)
+endif
 
 run: bin/main.js
 	node $<
@@ -6,5 +10,8 @@ run: bin/main.js
 debug: bin/main.js
 	node --inspect-brk $<
 
-bin/main.js: $(wildcard src/*.ts)
+bin/main.js: node_modules $(wildcard src/*.ts)
 	-tsc
+
+node_modules/:
+	npm i

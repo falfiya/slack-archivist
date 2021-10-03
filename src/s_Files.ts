@@ -1,9 +1,9 @@
 import {File} from "./slack";
 import {object, transmute, u64} from "./types";
 
-type Complete = {completeAt: u64, file: File};
-namespace Complete {
-   export function into(u: unknown): Complete {
+type CompleteInfo = {completeAt: u64, file: File};
+namespace CompleteInfo {
+   export function into(u: unknown): CompleteInfo {
       return transmute(u)
          .into(object.into)
          .fieldInto("completeAt", u64.into)
@@ -12,12 +12,12 @@ namespace Complete {
    }
 }
 
-type Completions = {[id: string]: Complete};
+type Completions = {[id: string]: CompleteInfo};
 namespace Completions {
    export function into(u: unknown): Completions {
       return transmute(u)
          .into(object.into)
-         .into(object.intoIndexSignature(Complete.into))
+         .into(object.intoIndexSignature(CompleteInfo.into))
          .it;
    };
 }

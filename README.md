@@ -29,8 +29,18 @@
 3. Either under "Install App" or "OAuth & Permissions", hit the button that says
    "Install to Workspace".
 4. At this point, you should be presented with a user token that starts with
-   `xoxp-`. Copy that and put it into the `userToken` field of the `config.json`
-   file.
+`xoxp-`. Copy that and save it for later.
+5. Clone this repository.
+6. `make`
+7. A `config.json` file will be created for you. Enter the token you got before
+   into the `"userToken"` field.
+
+## other information
+
+This archivist is quite robust. You can `ctrl+c` it at any time and it should
+pick up right where it left off. You can run it more than once or you can run it
+whenever. Shouldn't really matter. Don't mess with the generated json since the
+archiver will do some integrity checking.
 
 ## export structure
 

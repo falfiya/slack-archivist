@@ -11,9 +11,9 @@ export class sConfig {
       return {
          userToken: "xoxp-fill-in-the-rest-yourself",
          archiveDir: "my-slack-export-folder",
-         messageChunkSize: u64.into(100),
+         messageChunkSize: u64.into(500),
          sleepChunkSeconds: u64.into(5),
-         sleepFileSeconds: u64.into(5),
+         sleepFileSeconds: u64.into(3),
       };
    }
 

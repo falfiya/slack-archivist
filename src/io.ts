@@ -10,10 +10,6 @@ function flock(fd: fd) {
    fs_ext.flockSync(fd, fs_ext.constants.LOCK_EX);
 }
 
-function funlock(fd: fd) {
-   fs_ext.flockSync(fd, fs_ext.constants.LOCK_UN);
-}
-
 /**
  * remember to mkdirDeep before calling this.
  *
@@ -46,7 +42,7 @@ export function mkdirDeep(path: string): void {
    fs.mkdirSync(path, {recursive: true});
 }
 
-export function readJSON<T>(fd: fd) {
+export function readJSON(fd: fd): unknown {
    const buf = Buffer.alloc(fs.fstatSync(fd).size);
    fs.readSync(fd, buf);
    return fromJSON(buf.toString("utf8"));
@@ -58,6 +54,22 @@ export function write(fd: fd, buf: Buffer, length: number, offset: number): void
 
 export function writeToJSON(fd: fd, what: any): void {
    fs.writeSync(fd, toJSON(what), 0);
+}
+
+interface sSomething<T> {
+   default(): T;
+   into(u: unknown): T;
+}
+export function openStructuredJSON<T>(path: string, s: sSomething<T>): [fd, T] {
+   const [created, fd] = open(path);
+   let obj: T;
+   if (created) {
+      obj = s.default();
+      writeToJSON(fd, obj);
+   } else {
+      obj = s.into(readJSON(fd));
+   }
+   return [fd, obj];
 }
 
 export function put(str: string) {

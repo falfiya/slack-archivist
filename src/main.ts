@@ -16,7 +16,7 @@ let config_obj: sConfig;
    const [created, fd] = io.open(filename);
    if (created) {
       io.errs("You did not make a config file so I made one for you.");
-      io.writeToJSON(fd, sConfig.default);
+      io.writeToJSON(fd, sConfig.default());
       io.errs(`Your config file is at "${filename}".`);
       process.exit(1);
    }
@@ -29,18 +29,8 @@ const archiveDir = config_obj.archiveDir;
 const filesDir = `${archiveDir}/files`;
 
 io.mkdirDeep(archiveDir);
-let files_obj: sFiles;
-let files_fd: io.fd;
-{
-   const [created, fd] = io.open(`${archiveDir}/files.json`);
-   if (created) {
-      files_obj = sFiles.default();
-      io.writeToJSON(fd, files_obj);
-   } else {
-      files_obj = sFiles.into(io.readJSON(fd));
-   }
-   files_fd = fd;
-}
+const [files_fd, files_obj] =
+   io.openStructuredJSON(`${archiveDir}/files.json`, sFiles);
 
 const client = new Client(config_obj.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
@@ -58,18 +48,8 @@ void async function main(): Promise<void> {
       throw new TypeError(conversations.error);
    }
 
-   let channels_obj: sChannels;
-   let channels_fd: io.fd;
-   {
-      const [created, fd] = io.open(`${archiveDir}/channels.json`);
-      if (created) {
-         channels_obj = sChannels.default();
-         io.writeToJSON(fd, channels_obj);
-      } else {
-         channels_obj = sChannels.into(io.readJSON(fd));
-      }
-      channels_fd = fd;
-   }
+   const [channels_fd, channels_obj] =
+      io.openStructuredJSON(`${archiveDir}/channels.json`, sChannels);
 
    const channelsDir = `${archiveDir}/channels`;
    io.mkdirDeep(channelsDir)
@@ -95,31 +75,11 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
    const chanDir = `${parentDir}/${chan.id}`;
    io.mkdirDeep(chanDir);
 
-   let chunks_obj: sChunks;
-   let chunks_fd: io.fd;
-   {
-      const [created, fd] = io.open(`${chanDir}/chunks.json`);
-      if (created) {
-         chunks_obj = sChunks.default();
-         io.writeToJSON(fd, chunks_obj);
-      } else {
-         chunks_obj = sChunks.into(io.readJSON(fd));
-      }
-      chunks_fd = fd;
-   }
+   const [chunks_fd, chunks_obj] =
+      io.openStructuredJSON(`${chanDir}/chunks.json`, sChunks);
 
-   let messages_obj: sMessages;
-   let messages_fd: io.fd;
-   {
-      const [created, fd] = io.open(`${chanDir}/messages.json`);
-      if (created) {
-         messages_obj = sMessages.default();
-         io.writeToJSON(fd, messages_obj);
-      } else {
-         messages_obj = sMessages.into(io.readJSON(fd));
-      }
-      messages_fd = fd;
-   }
+   const [messages_fd, messages_obj] =
+      io.openStructuredJSON(`${chanDir}/messages.json`, sMessages);
 
    // start archiving from the last known message
    let shadowIndex = 0;
@@ -255,9 +215,6 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
 
 async function archiveMessage(msg: Message, messages_obj: sMessages) {
    const couldInsert = sMessages.insert(messages_obj, msg);
-   if (!couldInsert) {
-      // io.errs(`  MSG: skipping ${msg.ts}`);
-   }
 
    if (object.hasKey(msg, "files")) {
       const files = transmute(msg.files)
@@ -271,8 +228,7 @@ async function archiveMessage(msg: Message, messages_obj: sMessages) {
 }
 
 async function archiveFile(file: File) {
-   if (object.hasKey(files_obj.completions, file.id)) {
-      // io.puts(` FILE: skipping ${file.id}`);
+   if (object.hasOwnProperty.call(files_obj.completions, file.id)) {
       return;
    }
 
@@ -317,11 +273,11 @@ async function archiveFile(file: File) {
    });
 
    await Mushroom.waitFor(im);
+   io.close(fd);
    io.puts(`\r FILE: ${file.id} done`);
 
    delete files_obj.inProgress[file.id];
-   files_obj.completions[file.id] = u64.into(Date.now()) as never;
-   io.close(fd);
+   files_obj.completions[file.id] = {file, completeAt: u64.into(Date.now())};
 
    io.writeToJSON(files_fd, files_obj);
 }
