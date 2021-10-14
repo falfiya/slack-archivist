@@ -73,7 +73,7 @@ export namespace array {
       return u;
    }
 
-   export function into<T>(fn: ufn<T>) {
+   export function into<T, U = unknown>(fn: fn<U, T>) {
       return function intoCurried(u: unknown[]): T[] {
          if (!Array.isArray(u)) {
             throw new TypeError(`"${typeof u}" is not an array!`);
@@ -94,7 +94,7 @@ interface TransmuteBase<T> {
 }
 
 interface TransmuteObject<T> extends TransmuteBase<T> {
-   fieldInto<k extends string, U>(k: k, fn: ufn<U>):
+   fieldInto<k extends string, U>(k: k, fn: fn<k extends keyof T ? T[k] : unknown, U>):
       TransmuteObject<T & Record<k, U>>;
 }
 
@@ -111,7 +111,7 @@ class TransmuteInternal<T> implements TransmuteObject<T> {
          return new TransmuteInternal(fn(this.it)) as any;
       }
 
-   fieldInto<k extends string, U>(k: k, fn: fn<T, U>):
+   fieldInto<k extends string, U>(k: k, fn: fn<k extends keyof T ? T[k] : unknown, U>):
       TransmuteObject<T & Record<k, U>>
    {
       if (!Object.hasOwnProperty.call(this.it, k)) {

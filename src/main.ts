@@ -4,10 +4,11 @@ import {sFiles} from "./s_Files";
 import {sChannels} from "./s_Channels";
 import {sChunks} from "./s_Chunks";
 import {sMessages} from "./s_Messages";
-import {Client, Channel, Message, File} from "./slack";
+import {Client, Channel, Message, File, User} from "./slack";
 import {array, object, transmute, u64} from "./types";
 import {Mushroom, sleep} from "./util";
 import {IncomingMessage} from "http";
+import {sUsers} from "./s_Users";
 
 const cwd = process.cwd();
 let config_obj: sConfig;
@@ -35,13 +36,7 @@ const [files_fd, files_obj] =
 const client = new Client(config_obj.userToken);
 const allConversations = {types: "public_channel,private_channel,mpim,im"};
 void async function main(): Promise<void> {
-   {
-      const users = await client.users.list();
-      const [_, fd] = io.open(`${archiveDir}/users.json`);
-      // fix this later
-      io.writeToJSON(fd, users.members);
-      io.close(fd);
-   }
+   await archiveUsers();
 
    const conversations = await client.conversations.list(allConversations);
    if (conversations.channels === void 0) {
@@ -54,9 +49,7 @@ void async function main(): Promise<void> {
    const channelsDir = `${archiveDir}/channels`;
    io.mkdirDeep(channelsDir)
    for (const c of conversations.channels) {
-      const chan = transmute(c)
-         .into(Channel.into)
-         .it;
+      const chan = Channel.into(c);
 
       channels_obj[chan.id] = chan;
       io.writeToJSON(channels_fd, channels_obj);
@@ -68,6 +61,23 @@ void async function main(): Promise<void> {
    io.close(channels_fd);
    io.close(files_fd);
 }();
+
+async function archiveUsers(): Promise<void> {
+   const [fd, obj] = io.openStructuredJSON(`${archiveDir}/users.json`, sUsers);
+
+   const res = await client.users.list();
+   const {members} = transmute(res)
+      .into(object.into)
+      .fieldInto("members", array.intoUnknown)
+      .fieldInto("members", array.into(User.into))
+      .it;
+
+   for (const user of members) {
+      obj[user.id] = user;
+   }
+
+   io.writeToJSON(fd, obj);
+}
 
 async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
    io.puts(` CHAN: archiving ${chan.id}`);
@@ -116,13 +126,11 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       const {messages} = transmute(res)
          .into(object.into)
          .fieldInto("messages", array.intoUnknown)
+         .fieldInto("messages", array.into(Message.into))
          .it;
       const msgCount = messages.length;
 
-      for (const m of messages) {
-         const msg = transmute(m)
-            .into(Message.into)
-            .it;
+      for (const msg of messages) {
          await archiveMessage(msg, messages_obj);
       }
 
@@ -162,12 +170,8 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       let trueOldest;
       let trueLatest;
       {
-         const first = transmute(messages[0])
-            .into(Message.into)
-            .it.ts;
-         const last  = transmute(messages[msgCount - 1])
-            .into(Message.into)
-            .it.ts;
+         const first = Message.into(messages[0]).ts;
+         const last  = Message.into(messages[msgCount - 1]).ts;
 
          if (first === last) {
             // ok so this probably means we finished archiving.
@@ -248,7 +252,7 @@ async function archiveFile(file: File) {
 
    let im: IncomingMessage
    try {
-      im = await client.downloadFile(file, startingAt)
+      im = await client.downloadFile(file, startingAt);
    }
    catch (e: any) {
       io.errs(`\r${e}`);

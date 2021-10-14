@@ -11,7 +11,7 @@ debug: bin/main.js
 	node --inspect-brk $<
 
 bin/main.js: node_modules $(wildcard src/*.ts)
-	-tsc
+	tsc
 
 node_modules/:
 	npm i

@@ -6,6 +6,8 @@ import type {Message as SlackMessage, File as SlackFile} from
    "@slack/web-api/dist/response/ConversationsHistoryResponse";
 import type {Channel as SlackChannel} from
    "@slack/web-api/dist/response/ConversationsListResponse";
+import type {Member} from
+   "@slack/web-api/dist/response/UsersListResponse";
 
 declare const timestamp_s: unique symbol;
 export type timestamp_o = {[timestamp_s]: void};
@@ -58,6 +60,18 @@ export namespace Channel {
       return transmute(u)
          .into(object.into)
          .fieldInto("id", string.into)
+         .it;
+   }
+}
+
+export type User = Member & {id: string; team_id: string; name: string};
+export namespace User {
+   export function into(u: unknown): User {
+      return transmute(u)
+         .into(object.into)
+         .fieldInto("id", string.into)
+         .fieldInto("team_id", string.into)
+         .fieldInto("name", string.into)
          .it;
    }
 }

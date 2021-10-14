@@ -15,8 +15,8 @@ function flock(fd: fd) {
  *
  * open is responsible for giving you a file descriptor. most of the time, it's
  * kinda nice to know if you created the file as you opened it or if the file
- * was already there. that way if the file was never made, we shouldn't try
- * parsing it as data.
+ * was already there. if the file was just created now, maybe it's not a good
+ * idea to JSON.parse it's contents.
  */
 export function open(path: string): [created: boolean, fd: fd]
 {
@@ -34,7 +34,6 @@ export function open(path: string): [created: boolean, fd: fd]
 }
 
 export function close(fd: fd): void {
-   // funlock(fd);
    fs.closeSync(fd);
 }
 
