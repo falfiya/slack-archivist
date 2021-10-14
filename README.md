@@ -60,4 +60,40 @@ $archive_dir
 
 ## known issues
 
-- If you delete messages on a message boundary
+If you delete messages on a message boundary and there's an unarchived gap on
+either side of that deleted message, you'll have to manually change `chunks.json`.
+It's not ideal and the way to fix this would be to check the adjacent messages in
+`messages.json` and see if they exist until we can find a valid message. Right
+now, not a super big concern of mine.
+
+## how stuff is written
+
+~~poorly~~
+
+It's actually not written poorly. This code should be pretty dang robust. If
+something is not as expected. An error will be thrown etc. It won't just barrel
+on.
+
+This is my first time doing one of these bits where I actually try to explain
+the code. Throughout this repository, there are a lot of functions named `into`.
+Each of these is associated with a type. Perhaps `from` might've been a better
+name for these functions but I'm fine with `into`, right now. Their job is to
+take some opaque value and turn it into their type. Let's have a quick example
+here.
+
+```ts
+type HasFoo = {foo: number};
+function intoFoo(u: unknown): HasFoo {
+   return transmute(u)
+      .into(object.into)
+      .fieldInto("foo", number.into)
+      .it;
+}
+```
+
+What's that `transmute` thing? Well, am I sure glad you asked. It's my way of
+safely and incrementally chaining type transformations until I eventually reach
+an end type in `.it` that matches the desired output type. The details of it
+are somewhat gorey so I suggest just trying to understand what it does from the
+outside. Should be readable enough.
+
