@@ -9,16 +9,14 @@ export function sleep(s: number | bigint) {
 export const fromJSON = parse;
 export const toJSON = (what: any): string => stringify(what, null, 3);
 
-/** naming is hard alright. namespace to deal with ranged downloads */
-export namespace Mushroom {
-   export type Range = {
-      start: u64;
-      end: u64;
-      size: u64;
-   };
-
+export type Range = {
+   start: u64;
+   end: u64;
+   size: u64;
+};
+export namespace Range {
    /** it takes a http content-range response and turns it into an object. */
-   export function parseRange(im: IncomingMessage): Range {
+   export function into(im: IncomingMessage): Range {
       const bytes = "bytes ";
 
       let start = u64.ZERO;

@@ -1,14 +1,16 @@
 import * as io from "./io";
+
 import {sConfig} from "./s_Config";
-import {sFiles} from "./s_Files";
-import {sChannels} from "./s_Channels";
-import {sChunks} from "./s_Chunks";
-import {sMessages} from "./s_Messages";
-import {Client, Channel, Message, File, User} from "./slack";
-import {array, object, transmute, u64} from "./types";
-import {Mushroom, sleep} from "./util";
-import {IncomingMessage} from "http";
 import {sUsers} from "./s_Users";
+import {sChannels} from "./s_Channels";
+import {sMessages} from "./s_Messages";
+import {MessageChunk, sChunks} from "./s_Chunks";
+import {sFiles} from "./s_Files";
+
+import {Client, User, Channel, Message, File, Timestamp} from "./slack";
+import {array, object, string, transmute, u64} from "./types";
+import {sleep, Range} from "./util";
+import {IncomingMessage} from "http";
 
 const cwd = process.cwd();
 let config_obj: sConfig;
@@ -34,7 +36,7 @@ const [files_fd, files_obj] =
    io.openStructuredJSON(`${archiveDir}/files.json`, sFiles);
 
 const client = new Client(config_obj.userToken);
-const allConversations = {types: "public_channel,private_channel,mpim,im"};
+const allConversations = {types: "public_channel,private_channel,mpim,im"}; 
 void async function main(): Promise<void> {
    await archiveUsers();
 
@@ -62,6 +64,9 @@ void async function main(): Promise<void> {
    io.close(files_fd);
 }();
 
+/**
+ * Shove user information into archiveDir/users.json and download avatars.
+ */
 async function archiveUsers(): Promise<void> {
    const [fd, obj] = io.openStructuredJSON(`${archiveDir}/users.json`, sUsers);
 
@@ -72,7 +77,24 @@ async function archiveUsers(): Promise<void> {
       .fieldInto("members", array.into(User.into))
       .it;
 
+   const avatarsDir = `${archiveDir}/avatars`;
+   io.mkdirDeep(avatarsDir);
+
    for (const user of members) {
+      try {
+         const userAvatarDir = `${avatarsDir}/${user.id}`;
+         io.mkdirDeep(userAvatarDir);
+         const {profile} = transmute(user)
+            .fieldInto("profile", object.into)
+            .it;
+         const profileWithAvatars = transmute(profile)
+            .fieldInto("avatar_hash", string.into);
+         
+         client.downloadFile(`${userAvatarDir}/${profileWithAvatars.}`)
+      }
+      catch (_) {
+         io.errs(`  PFP: Could not download avatar for ${user.id}`);
+      }
       obj[user.id] = user;
    }
 
@@ -106,7 +128,6 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       if (paramOldest !== void 0) // guard for not start of time
       if (paramLatest !== void 0) // guard for not end of time (not required)
       {
-         // io.puts(`CHUNK: skipping ${paramOldest}->${paramLatest}`);
          shadowIndex++;
          continue;
       }
@@ -137,21 +158,8 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       // When a chunk of messages comes in, there's a bit that we have to do to
       // record what's happened. Firstly, we shove it into that messages array.
       // (you can see me doing that above this comment)
-      // secondly, we need to record the progress.
+      // Secondly, we need to record the progress.
 
-      // Imagine that this is the first time we've started the archiver. Right
-      // now, there is no progress and so oldest and latest are undefined.
-      // So when recording that we downloaded a message chunk, clearly we'll
-      // need something more than just the parameters we passed to the API call.
-      // We'll need to know the "true" oldest and latest message.
-
-      // As far as I'm aware, the Slack API generally responds with messages in
-      // reverse chronological order. In the cases where it doesn't, it's in
-      // chronological order. It should be pretty safe to say that the oldest
-      // message is either at the front or the back of the array. Same thing
-      // with the latest message.
-
-      // Let's just compute the true oldest and latest here:
       if (messages.length === 0) {
          // if the chunk is empty, we can continue on
          shadowIndex++;
@@ -167,8 +175,21 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
          continue;
       }
 
-      let trueOldest;
-      let trueLatest;
+      // Imagine that this is the first time we've started the archiver. Right
+      // now, there is no progress and so oldest and latest are undefined.
+      // So when recording that we downloaded a message chunk, clearly we'll
+      // need something more than just the parameters we passed to the API call.
+      // We'll need to know the "true" oldest and latest message.
+
+      // As far as I'm aware, the Slack API generally responds with messages in
+      // reverse chronological order. In the cases where it doesn't, it's in
+      // chronological order. It should be pretty safe to say that the oldest
+      // message is either at the front or the back of the array. Same thing
+      // with the latest message.
+
+      // Let's just compute the true oldest and latest here:
+      let trueOldest: Timestamp;
+      let trueLatest: Timestamp;
       {
          const first = Message.into(messages[0]).ts;
          const last  = Message.into(messages[msgCount - 1]).ts;
@@ -188,7 +209,7 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
          }
       }
 
-      let chunk;
+      let chunk: MessageChunk;
       if (res.has_more) {
          chunk = {
             oldest: trueOldest,
@@ -198,8 +219,7 @@ async function archiveChannel(chan: Channel, parentDir: string): Promise<void> {
       } else {
          // In most cases, we want to use the true oldest and latest. But when
          // don't we? There is one case, and that's with filling gaps of no
-         // messages. I am unable to come up with a reason as to why this might
-         // happen but in the event that it could, here you go.
+         // messages.
          chunk = {
             oldest: paramOldest ?? trueOldest,
             latest: paramLatest ?? trueLatest,
@@ -250,7 +270,7 @@ async function archiveFile(file: File) {
       startingAt = files_obj.inProgress[file.id];
    }
 
-   let im: IncomingMessage
+   let im: IncomingMessage;
    try {
       im = await client.downloadFile(file, startingAt);
    }
@@ -258,7 +278,7 @@ async function archiveFile(file: File) {
       io.errs(`\r${e}`);
       return;
    }
-   const range = Mushroom.parseRange(im);
+   const range = Range.into(im);
    const size = Number(range.size);
    let offset = Number(range.start);
 
@@ -276,7 +296,7 @@ async function archiveFile(file: File) {
       io.put(`\r FILE: ${file.id} ${percent}%`);
    });
 
-   await Mushroom.waitFor(im);
+   await Range.waitFor(im);
    io.close(fd);
    io.puts(`\r FILE: ${file.id} done`);
 

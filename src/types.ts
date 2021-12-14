@@ -123,6 +123,6 @@ class TransmuteInternal<T> implements TransmuteObject<T> {
 }
 
 
-export function transmute<T = unknown>(it: T): TransmuteBase<T> {
-   return new TransmuteInternal(it);
+export function transmute<T = unknown>(it: T): T extends object ? TransmuteObject<T> : TransmuteBase<T> {
+   return new TransmuteInternal(it) as any;
 }
