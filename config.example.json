@@ -1,0 +1,7 @@
+{
+   "userToken": "xoxp-",
+   "archiveDir": "my-slack-export-folder",
+   "messageChunkSize": 500,
+   "sleepChunkSeconds": 3,
+   "sleepFileSeconds": 1
+}

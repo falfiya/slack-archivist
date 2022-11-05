@@ -13,5 +13,5 @@ debug: bin/main.js
 bin/main.js: node_modules $(wildcard src/*.ts)
 	tsc
 
-node_modules/:
+node_modules:
 	npm i
